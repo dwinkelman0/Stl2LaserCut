@@ -6,6 +6,12 @@ Vec3 operator-(const Vec3 vec) {
   return {-std::get<0>(vec), -std::get<1>(vec), -std::get<2>(vec)};
 }
 
+Vec3 operator-(const Vec3 vec1, const Vec3 vec2) {
+  return {std::get<0>(vec1) - std::get<0>(vec2),
+          std::get<1>(vec1) - std::get<1>(vec2),
+          std::get<2>(vec1) - std::get<2>(vec2)};
+}
+
 Vec3 operator/(const Vec3 vec, const float x) {
   return {std::get<0>(vec) / x, std::get<1>(vec) / x, std::get<2>(vec) / x};
 }
@@ -14,6 +20,15 @@ float dot(const Vec3 vec1, const Vec3 vec2) {
   return std::get<0>(vec1) * std::get<0>(vec2) +
          std::get<1>(vec1) * std::get<1>(vec2) +
          std::get<2>(vec1) * std::get<2>(vec2);
+}
+
+Vec3 cross(const Vec3 vec1, const Vec3 vec2) {
+  return {std::get<1>(vec1) * std::get<2>(vec2) -
+              std::get<2>(vec1) * std::get<1>(vec2),
+          std::get<2>(vec1) * std::get<0>(vec2) -
+              std::get<0>(vec1) * std::get<2>(vec2),
+          std::get<0>(vec1) * std::get<1>(vec2) -
+              std::get<1>(vec1) * std::get<0>(vec2)};
 }
 
 float abs(const Vec3 vec) {
@@ -43,6 +58,22 @@ float Edge::getAngle() const {
   assert(leftFace_);
   assert(rightFace_);
   return angle(leftFace_->getNormal(), rightFace_->getNormal());
+}
+
+bool Edge::isConvex() const {
+  assert(leftFace_);
+  assert(rightFace_);
+  Vec3 vector = v2_->getVector() - v1_->getVector();
+  Vec3 normal = cross(leftFace_->getNormal(), rightFace_->getNormal());
+  float alignment = dot(vector, normal);
+  return alignment > 0;
+}
+
+void Face::link() {
+  for (uint32_t i = 0; i < vertices_.size() - 1; ++i) {
+    vertices_[i]->link(this->shared_from_this(), vertices_[i + 1]);
+  }
+  vertices_.back()->link(this->shared_from_this(), vertices_.front());
 }
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {

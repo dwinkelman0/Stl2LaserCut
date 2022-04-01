@@ -20,8 +20,10 @@ using FacePtr = std::shared_ptr<Face>;
 using Vec3 = std::tuple<float, float, float>;
 
 Vec3 operator-(const Vec3 vec);
+Vec3 operator-(const Vec3 vec1, const Vec3 vec2);
 Vec3 operator/(const Vec3 vec, const float x);
 float dot(const Vec3 vec1, const Vec3 vec2);
+Vec3 cross(const Vec3 vec1, const Vec3 vec2);
 float abs(const Vec3 vec);
 float angle(const Vec3 vec1, const Vec3 vec2);
 
@@ -30,6 +32,8 @@ class Vertex : public std::enable_shared_from_this<Vertex> {
   static VertexPtr create(const Vec3 vec) { return VertexPtr(new Vertex(vec)); }
 
   void link(const FacePtr &face, const VertexPtr &other);
+
+  inline Vec3 getVector() const { return vec_; }
 
   friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
@@ -50,6 +54,7 @@ class Edge : public std::enable_shared_from_this<Edge> {
   }
 
   float getAngle() const;
+  bool isConvex() const;
 
  protected:
   Edge(const VertexPtr &v1, const VertexPtr &v2) : v1_(v1), v2_(v2) {}
@@ -68,12 +73,7 @@ class Face : public std::enable_shared_from_this<Face> {
     return FacePtr(new Face(vertices, normal));
   }
 
-  void link() {
-    for (uint32_t i = 0; i < vertices_.size() - 1; ++i) {
-      vertices_[i]->link(this->shared_from_this(), vertices_[i + 1]);
-    }
-    vertices_.back()->link(this->shared_from_this(), vertices_.front());
-  }
+  void link();
 
   inline Vec3 getNormal() const { return normal_; }
 

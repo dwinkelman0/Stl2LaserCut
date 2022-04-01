@@ -22,7 +22,7 @@ int main() {
   }
   std::set<EdgePtr> edges = collectEdges(faces);
   for (const EdgePtr edge : edges) {
-    std::cout << edge->getAngle() * 180 / 3.14159265358979 << " degrees"
-              << std::endl;
+    std::cout << edge->getAngle() * 180 / std::numbers::pi << " degrees "
+              << (edge->isConvex() ? "convex" : "concave") << std::endl;
   }
 }

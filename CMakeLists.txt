@@ -6,7 +6,7 @@ set (CMAKE_BUILD_TYPE Debug)
 set (CMAKE_CXX_STANDARD 20)
 
 project (Stl2LaserCut CXX)
-set (Target_lib stl2lasercut-lib)
+set (Target_lib stl2lasercut)
 set (Target_client stl2lasercut-client)
 # set (Target_tests stl2lasercut-tests)
 
