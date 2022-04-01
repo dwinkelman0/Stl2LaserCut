@@ -17,6 +17,7 @@ class Edge;
 using EdgePtr = std::shared_ptr<Edge>;
 class Face;
 using FacePtr = std::shared_ptr<Face>;
+using Vec2 = std::tuple<float, float>;
 using Vec3 = std::tuple<float, float, float>;
 
 Vec3 operator-(const Vec3 vec);
@@ -26,6 +27,9 @@ float dot(const Vec3 vec1, const Vec3 vec2);
 Vec3 cross(const Vec3 vec1, const Vec3 vec2);
 float abs(const Vec3 vec);
 float angle(const Vec3 vec1, const Vec3 vec2);
+Vec3 rotateX(const Vec3 vec, const float angle);
+Vec3 rotateY(const Vec3 vec, const float angle);
+Vec3 rotateZ(const Vec3 vec, const float angle);
 
 class Vertex : public std::enable_shared_from_this<Vertex> {
  public:
@@ -76,19 +80,28 @@ class Face : public std::enable_shared_from_this<Face> {
   void link();
 
   inline Vec3 getNormal() const { return normal_; }
+  inline std::vector<VertexPtr> getVertices() const { return vertices_; }
   bool isPlanar() const;
 
   friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
  protected:
   Face(const std::vector<VertexPtr> &vertices, const Vec3 &normal)
-      : vertices_(vertices), normal_(normal) {
+      : vertices_(vertices), normal_(normal / abs(normal)) {
     assert(vertices.size() >= 3);
   }
 
  private:
   std::vector<VertexPtr> vertices_;
   Vec3 normal_;
+};
+
+class Polygon {
+ public:
+  Polygon(const FacePtr &face);
+
+ private:
+  std::vector<Vec2> points_;
 };
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);

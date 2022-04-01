@@ -25,6 +25,7 @@ int main() {
       std::cout << "Face is not planar" << std::endl;
       allFacesPlanar = false;
     }
+    Polygon poly(face);
   }
 
   std::set<EdgePtr> edges = collectEdges(faces);

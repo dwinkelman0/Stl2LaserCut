@@ -2,7 +2,7 @@
 
 #include "Geometry.h"
 
-#include <iostream>
+#include <numbers>
 
 Vec3 operator-(const Vec3 vec) {
   return {-std::get<0>(vec), -std::get<1>(vec), -std::get<2>(vec)};
@@ -40,7 +40,29 @@ float abs(const Vec3 vec) {
 }
 
 float angle(const Vec3 vec1, const Vec3 vec2) {
-  return std::acos(dot(vec1, vec2) / abs(vec1) / abs(vec2));
+  float mag = abs(vec1) * abs(vec2);
+  return mag > 0 ? std::acos(dot(vec1, vec2) / mag) : 0;
+}
+
+Vec3 rotateX(const Vec3 vec, const float angle) {
+  return {
+      std::get<0>(vec),
+      std::cos(angle) * std::get<1>(vec) - std::sin(angle) * std::get<2>(vec),
+      std::sin(angle) * std::get<1>(vec) + std::cos(angle) * std::get<2>(vec)};
+}
+
+Vec3 rotateY(const Vec3 vec, const float angle) {
+  return {
+      std::sin(angle) * std::get<2>(vec) + std::cos(angle) * std::get<0>(vec),
+      std::get<1>(vec),
+      std::cos(angle) * std::get<2>(vec) - std::sin(angle) * std::get<0>(vec)};
+}
+
+Vec3 rotateZ(const Vec3 vec, const float angle) {
+  return {
+      std::cos(angle) * std::get<0>(vec) - std::sin(angle) * std::get<1>(vec),
+      std::sin(angle) * std::get<0>(vec) + std::cos(angle) * std::get<1>(vec),
+      std::get<2>(vec)};
 }
 
 void Vertex::link(const FacePtr &face, const VertexPtr &other) {
@@ -90,6 +112,26 @@ bool Face::isPlanar() const {
     }
   }
   return true;
+}
+
+Polygon::Polygon(const FacePtr &face) {
+  // Rotate about Z so that face is normal to an axis in YZ plane
+  float angleZ = angle(cross(face->getNormal(), {0, 0, 1}), {1, 0, 0});
+  Vec3 normal = rotateZ(face->getNormal(), angleZ);
+
+  // Rotate about X so that face is normal to Z axis
+  float angleX = angle(normal, {0, 0, 1});
+  normal = rotateX(normal, angleX);
+
+  // Get correct orientation
+  float orientation = dot(normal, {0, 0, 1}) > 0 ? 0 : std::numbers::pi;
+  angleX += orientation;
+
+  // Process all points
+  for (const VertexPtr &vertex : face->getVertices()) {
+    Vec3 transformed = rotateX(rotateZ(vertex->getVector(), angleZ), angleX);
+    points_.push_back({std::get<0>(transformed), std::get<1>(transformed)});
+  }
 }
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
