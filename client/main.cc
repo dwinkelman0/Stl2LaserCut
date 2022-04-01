@@ -17,9 +17,16 @@ int main() {
   FacePtr f3 = Face::create(
       {v1, v2, v3}, {1 / std::sqrt(3), 1 / std::sqrt(3), 1 / std::sqrt(3)});
   std::vector<FacePtr> faces({f0, f1, f2, f3});
+
+  bool allFacesPlanar = true;
   for (const FacePtr &face : faces) {
     face->link();
+    if (!face->isPlanar()) {
+      std::cout << "Face is not planar" << std::endl;
+      allFacesPlanar = false;
+    }
   }
+
   std::set<EdgePtr> edges = collectEdges(faces);
   for (const EdgePtr edge : edges) {
     std::cout << edge->getAngle() * 180 / std::numbers::pi << " degrees "

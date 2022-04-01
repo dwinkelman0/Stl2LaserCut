@@ -2,6 +2,8 @@
 
 #include "Geometry.h"
 
+#include <iostream>
+
 Vec3 operator-(const Vec3 vec) {
   return {-std::get<0>(vec), -std::get<1>(vec), -std::get<2>(vec)};
 }
@@ -64,8 +66,8 @@ bool Edge::isConvex() const {
   assert(leftFace_);
   assert(rightFace_);
   Vec3 vector = v2_->getVector() - v1_->getVector();
-  Vec3 normal = cross(leftFace_->getNormal(), rightFace_->getNormal());
-  float alignment = dot(vector, normal);
+  Vec3 product = cross(leftFace_->getNormal(), rightFace_->getNormal());
+  float alignment = dot(vector, product);
   return alignment > 0;
 }
 
@@ -74,6 +76,20 @@ void Face::link() {
     vertices_[i]->link(this->shared_from_this(), vertices_[i + 1]);
   }
   vertices_.back()->link(this->shared_from_this(), vertices_.front());
+}
+
+bool Face::isPlanar() const {
+  Vec3 basisEdge = vertices_[1]->getVector() - vertices_[0]->getVector();
+  for (uint32_t i = 2; i < vertices_.size(); ++i) {
+    Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
+    Vec3 product = cross(basisEdge, secondEdge);
+    product = product / abs(product);
+    float alignment = dot(product, normal_);
+    if (abs(alignment - 1) > 1e-6) {
+      return false;
+    }
+  }
+  return true;
 }
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {

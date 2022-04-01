@@ -76,6 +76,7 @@ class Face : public std::enable_shared_from_this<Face> {
   void link();
 
   inline Vec3 getNormal() const { return normal_; }
+  bool isPlanar() const;
 
   friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
