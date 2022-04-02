@@ -114,6 +114,53 @@ bool Face::isPlanar() const {
   return true;
 }
 
+std::optional<Vec2> Line::getIntersection(const Line &other) const {
+  if (a_ * other.b_ - b_ * other.a_ == 0) {
+    return std::nullopt;
+  } else if (a_ != 0) {
+    float ratio = other.a_ / a_;
+    float y = (other.c_ - ratio * c_) / (other.b_ - ratio * b_);
+    float x = (c_ - b_ * y) / a_;
+    return std::optional<Vec2>({x, y});
+  } else {
+    return other.getIntersection(*this);
+  }
+}
+
+Line Line::getOffsetLine(const float offset) const {
+  return Line(a_, b_,
+              c_ + offset * sqrt(a_ * a_ + b_ * b_) * (direction_ ? 1 : -1),
+              direction_);
+}
+
+bool Line::getPossibleEquality(const Line &other) const {
+  return !getIntersection(other) &&
+         ((b_ != 0 && other.b_ != 0 && c_ / b_ == other.c_ / other.b_) ||
+          (a_ != 0 && other.a_ != 0 && c_ / a_ == other.c_ / other.a_));
+}
+
+std::optional<Vec2> BoundedLine::getBoundedIntersection(
+    const BoundedLine &other) const {
+  auto result = getIntersection(other);
+  if (result) {
+    float x = std::get<0>(*result);
+    float y = std::get<1>(*result);
+    if (std::get<0>(lowerBound_) <= x && x <= std::get<0>(upperBound_) &&
+        std::get<1>(lowerBound_) <= y && y <= std::get<1>(upperBound_)) {
+      return result;
+    } else {
+      return std::nullopt;
+    }
+  } else {
+    return std::nullopt;
+  }
+}
+
+std::ostream &operator<<(std::ostream &os, const Line &line) {
+  os << line.a_ << "x + " << line.b_ << "y = " << line.c_;
+  return os;
+}
+
 Polygon::Polygon(const FacePtr &face) {
   // Rotate about Z so that face is normal to an axis in YZ plane
   float angleZ = angle(cross(face->getNormal(), {0, 0, 1}), {1, 0, 0});
@@ -133,6 +180,8 @@ Polygon::Polygon(const FacePtr &face) {
     points_.push_back({std::get<0>(transformed), std::get<1>(transformed)});
   }
 }
+
+bool Polygon::isSelfIntersecting() const {}
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
   std::set<EdgePtr> edges;

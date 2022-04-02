@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include <cmath>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <set>
@@ -96,9 +97,63 @@ class Face : public std::enable_shared_from_this<Face> {
   Vec3 normal_;
 };
 
+class Line {
+ public:
+  Line(const float a, const float b, const float c, const float direction)
+      : a_(a), b_(b), c_(c), direction_(direction) {}
+
+  std::optional<Vec2> getIntersection(const Line &other) const;
+  Line getOffsetLine(const float offset) const;
+  bool getPossibleEquality(const Line &other) const;
+
+  friend std::ostream &operator<<(std::ostream &os, const Line &line);
+
+ protected:
+  float a_, b_, c_;
+  bool direction_;
+};
+
+class BoundedLine : public Line {
+ public:
+  BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
+    if ((std::get<0>(b1) == std::get<0>(b2) &&
+         std::get<1>(b1) < std::get<1>(b2)) ||
+        std::get<0>(b1) < std::get<0>(b2)) {
+      lowerBound_ = b1;
+      upperBound_ = b2;
+      direction_ = true;
+    } else {
+      lowerBound_ = b2;
+      upperBound_ = b1;
+      direction_ = false;
+    }
+    auto result =
+        Line(std::get<0>(b1), std::get<1>(b1), 1, true)
+            .getIntersection(Line(std::get<0>(b2), std::get<1>(b2), 1, true));
+    if (!result) {
+      a_ = std::get<0>(b1) - std::get<0>(b2);
+      b_ = std::get<1>(b2) - std::get<1>(b1);
+      c_ = 0;
+    } else {
+      a_ = std::get<0>(*result);
+      b_ = std::get<1>(*result);
+      c_ = 1;
+    }
+    assert(std::get<0>(lowerBound_) <= std::get<0>(upperBound_));
+  }
+
+  std::optional<Vec2> getBoundedIntersection(const BoundedLine &other) const;
+  bool getPossibleEquality(const BoundedLine &other) const;
+
+ private:
+  Vec2 lowerBound_, upperBound_;
+};
+
 class Polygon {
  public:
   Polygon(const FacePtr &face);
+
+  bool isSelfIntersecting() const;
 
  private:
   std::vector<Vec2> points_;
