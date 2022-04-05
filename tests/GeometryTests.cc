@@ -96,4 +96,18 @@ TEST(Geometry, BoundedLine) {
   BoundedLine l4({0, 5}, {6, 5});
   Line c4(0, 1, 5, true);
   ASSERT_TRUE(c4.getPossibleEquality(l4));
+
+  BoundedLine l5({0, 0}, {1, 0});
+  Line c5(0, 1, 0, true);
+  ASSERT_TRUE(c5.getPossibleEquality(l5));
+}
+
+TEST(Geometry, PolygonSelfIntersection) {
+  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+  Polygon p0(points0);
+  ASSERT_FALSE(p0.isSelfIntersecting());
+
+  std::vector<Vec2> points1 = {{0, 0}, {1, 1}, {1, 0}, {0, 1}};
+  Polygon p1(points1);
+  ASSERT_TRUE(p1.isSelfIntersecting());
 }

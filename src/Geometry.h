@@ -32,6 +32,9 @@ Vec3 rotateX(const Vec3 vec, const float angle);
 Vec3 rotateY(const Vec3 vec, const float angle);
 Vec3 rotateZ(const Vec3 vec, const float angle);
 
+std::ostream &operator<<(std::ostream &os, const Vec2 &vec);
+std::ostream &operator<<(std::ostream &os, const Vec3 &vec);
+
 class Vertex : public std::enable_shared_from_this<Vertex> {
  public:
   static VertexPtr create(const Vec3 vec) { return VertexPtr(new Vertex(vec)); }
@@ -115,35 +118,11 @@ class Line {
 
 class BoundedLine : public Line {
  public:
-  BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
-    if ((std::get<0>(b1) == std::get<0>(b2) &&
-         std::get<1>(b1) < std::get<1>(b2)) ||
-        std::get<0>(b1) < std::get<0>(b2)) {
-      lowerBound_ = b1;
-      upperBound_ = b2;
-      direction_ = true;
-    } else {
-      lowerBound_ = b2;
-      upperBound_ = b1;
-      direction_ = false;
-    }
-    auto result =
-        Line(std::get<0>(b1), std::get<1>(b1), 1, true)
-            .getIntersection(Line(std::get<0>(b2), std::get<1>(b2), 1, true));
-    if (!result) {
-      a_ = std::get<0>(b1) - std::get<0>(b2);
-      b_ = std::get<1>(b2) - std::get<1>(b1);
-      c_ = 0;
-    } else {
-      a_ = std::get<0>(*result);
-      b_ = std::get<1>(*result);
-      c_ = 1;
-    }
-    assert(std::get<0>(lowerBound_) <= std::get<0>(upperBound_));
-  }
+  BoundedLine(const Vec2 b1, const Vec2 b2);
 
   std::optional<Vec2> getBoundedIntersection(const BoundedLine &other) const;
-  bool getPossibleEquality(const BoundedLine &other) const;
+
+  friend std::ostream &operator<<(std::ostream &os, const BoundedLine &line);
 
  private:
   Vec2 lowerBound_, upperBound_;
@@ -151,6 +130,7 @@ class BoundedLine : public Line {
 
 class Polygon {
  public:
+  Polygon(const std::vector<Vec2> &points) : points_(points) {}
   Polygon(const FacePtr &face);
 
   bool isSelfIntersecting() const;

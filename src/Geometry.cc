@@ -65,6 +65,17 @@ Vec3 rotateZ(const Vec3 vec, const float angle) {
       std::get<2>(vec)};
 }
 
+std::ostream &operator<<(std::ostream &os, const Vec2 &vec) {
+  os << "(" << std::get<0>(vec) << ", " << std::get<1>(vec) << ")";
+  return os;
+}
+
+std::ostream &operator<<(std::ostream &os, const Vec3 &vec) {
+  os << "(" << std::get<0>(vec) << ", " << std::get<1>(vec) << ", "
+     << std::get<2>(vec) << ")";
+  return os;
+}
+
 void Vertex::link(const FacePtr &face, const VertexPtr &other) {
   auto newEdge = Edge::create(this->shared_from_this(), other);
   auto [it1, success1] = edges_.emplace(other, newEdge);
@@ -139,6 +150,53 @@ bool Line::getPossibleEquality(const Line &other) const {
           (a_ != 0 && other.a_ != 0 && c_ / a_ == other.c_ / other.a_));
 }
 
+std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {
+  os << dynamic_cast<const Line &>(line) << ", ";
+  if (line.b_ == 0) {
+    os << std::get<1>(line.lowerBound_) << " < y < "
+       << std::get<1>(line.upperBound_);
+  } else {
+    os << std::get<0>(line.lowerBound_) << " < x < "
+       << std::get<0>(line.upperBound_);
+  }
+  return os;
+}
+
+BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
+  if ((std::get<0>(b1) == std::get<0>(b2) &&
+       std::get<1>(b1) < std::get<1>(b2)) ||
+      std::get<0>(b1) < std::get<0>(b2)) {
+    lowerBound_ = b1;
+    upperBound_ = b2;
+    direction_ = true;
+  } else {
+    lowerBound_ = b2;
+    upperBound_ = b1;
+    direction_ = false;
+  }
+  auto result =
+      Line(std::get<0>(b1), std::get<1>(b1), 1, true)
+          .getIntersection(Line(std::get<0>(b2), std::get<1>(b2), 1, true));
+  if (!result) {
+    if (std::get<0>(b1) == 0 && std::get<0>(b2) == 0) {
+      a_ = 1;
+      b_ = 0;
+    } else if (std::get<1>(b1) == 0 && std::get<1>(b2) == 0) {
+      a_ = 0;
+      b_ = 1;
+    } else {
+      a_ = std::get<0>(b1) - std::get<0>(b2);
+      b_ = std::get<1>(b2) - std::get<1>(b1);
+    }
+    c_ = 0;
+  } else {
+    a_ = std::get<0>(*result);
+    b_ = std::get<1>(*result);
+    c_ = 1;
+  }
+  assert(std::get<0>(lowerBound_) <= std::get<0>(upperBound_));
+}
+
 std::optional<Vec2> BoundedLine::getBoundedIntersection(
     const BoundedLine &other) const {
   auto result = getIntersection(other);
@@ -181,7 +239,22 @@ Polygon::Polygon(const FacePtr &face) {
   }
 }
 
-bool Polygon::isSelfIntersecting() const {}
+bool Polygon::isSelfIntersecting() const {
+  std::vector<BoundedLine> lines;
+  for (uint32_t i = 0; i < points_.size() - 1; ++i) {
+    lines.push_back(BoundedLine(points_[i], points_[i + 1]));
+  }
+  lines.push_back(BoundedLine(points_.back(), points_.front()));
+  for (uint32_t i = 0; i < lines.size(); ++i) {
+    for (uint32_t j = i + 2; j < std::min(lines.size(), lines.size() - 1 + i);
+         ++j) {
+      if (lines[i].getIntersection(lines[j])) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
   std::set<EdgePtr> edges;
