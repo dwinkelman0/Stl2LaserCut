@@ -8,6 +8,11 @@ Vec3 operator-(const Vec3 vec) {
   return {-std::get<0>(vec), -std::get<1>(vec), -std::get<2>(vec)};
 }
 
+Vec2 operator-(const Vec2 vec1, const Vec2 vec2) {
+  return {std::get<0>(vec1) - std::get<0>(vec2),
+          std::get<1>(vec1) - std::get<1>(vec2)};
+}
+
 Vec3 operator-(const Vec3 vec1, const Vec3 vec2) {
   return {std::get<0>(vec1) - std::get<0>(vec2),
           std::get<1>(vec1) - std::get<1>(vec2),
@@ -22,6 +27,11 @@ float dot(const Vec3 vec1, const Vec3 vec2) {
   return std::get<0>(vec1) * std::get<0>(vec2) +
          std::get<1>(vec1) * std::get<1>(vec2) +
          std::get<2>(vec1) * std::get<2>(vec2);
+}
+
+float cross(const Vec2 vec1, const Vec2 vec2) {
+  return std::get<0>(vec1) * std::get<1>(vec2) -
+         std::get<0>(vec2) * std::get<1>(vec1);
 }
 
 Vec3 cross(const Vec3 vec1, const Vec3 vec2) {
@@ -117,12 +127,29 @@ bool Face::isPlanar() const {
     Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
     Vec3 product = cross(basisEdge, secondEdge);
     product = product / abs(product);
-    float alignment = dot(product, normal_);
-    if (abs(alignment - 1) > 1e-6) {
-      return false;
+    if (abs(product) > 0) {
+      float alignment = dot(product, normal_);
+      if (abs(alignment - 1) > 1e-6) {
+        return false;
+      }
     }
   }
   return true;
+}
+
+float Face::getArea() const {
+  float output = 0;
+  for (uint32_t i = 2; i < vertices_.size(); ++i) {
+    Vec3 basisEdge = vertices_[i - 1]->getVector() - vertices_[0]->getVector();
+    Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
+    Vec3 product = cross(basisEdge, secondEdge);
+    if (dot(product, normal_) > 0) {
+      output += abs(product) / 2;
+    } else {
+      output -= abs(product) / 2;
+    }
+  }
+  return output;
 }
 
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
@@ -259,6 +286,16 @@ bool Polygon::isSelfIntersecting() const {
     }
   }
   return false;
+}
+
+float Polygon::getArea() const {
+  float output = 0;
+  for (uint32_t i = 2; i < points_.size(); ++i) {
+    Vec2 basisEdge = points_[i - 1] - points_[0];
+    Vec2 secondEdge = points_[i] - points_[0];
+    output += cross(basisEdge, secondEdge) / 2;
+  }
+  return output;
 }
 
 std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {

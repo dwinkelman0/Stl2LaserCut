@@ -22,9 +22,11 @@ using Vec2 = std::tuple<float, float>;
 using Vec3 = std::tuple<float, float, float>;
 
 Vec3 operator-(const Vec3 vec);
+Vec2 operator-(const Vec2 vec1, const Vec2 vec2);
 Vec3 operator-(const Vec3 vec1, const Vec3 vec2);
 Vec3 operator/(const Vec3 vec, const float x);
 float dot(const Vec3 vec1, const Vec3 vec2);
+float cross(const Vec2 vec1, const Vec2 vec2);
 Vec3 cross(const Vec3 vec1, const Vec3 vec2);
 float abs(const Vec3 vec);
 float angle(const Vec3 vec1, const Vec3 vec2);
@@ -86,13 +88,16 @@ class Face : public std::enable_shared_from_this<Face> {
   inline Vec3 getNormal() const { return normal_; }
   inline std::vector<VertexPtr> getVertices() const { return vertices_; }
   bool isPlanar() const;
+  float getArea() const;
 
   friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
  protected:
   Face(const std::vector<VertexPtr> &vertices, const Vec3 &normal)
       : vertices_(vertices), normal_(normal / abs(normal)) {
-    assert(vertices.size() >= 3);
+    assert(vertices_.size() >= 3);
+    assert(getArea() > 0);
+    assert(isPlanar());
   }
 
  private:
@@ -134,6 +139,7 @@ class Polygon {
   Polygon(const FacePtr &face);
 
   bool isSelfIntersecting() const;
+  float getArea() const;
 
  private:
   std::vector<Vec2> points_;

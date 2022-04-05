@@ -11,13 +11,41 @@ TEST(Geometry, FaceIsPlanar) {
   VertexPtr v4 = Vertex::create({0, 1, 1});
   FacePtr f0 = Face::create({v0, v1, v2}, {0, 0, 1});
   ASSERT_TRUE(f0->isPlanar());
-  FacePtr f1 =
-      Face::create({v0, v1, v2}, {0, 1 / std::sqrt(2), 1 / std::sqrt(2)});
-  ASSERT_FALSE(f1->isPlanar());
-  FacePtr f2 = Face::create({v0, v1, v2, v3}, {0, 0, 1});
-  ASSERT_TRUE(f2->isPlanar());
-  FacePtr f3 = Face::create({v0, v1, v2, v4}, {0, 0, 1});
-  ASSERT_FALSE(f3->isPlanar());
+  FacePtr f1 = Face::create({v0, v1, v3, v2}, {0, 0, 1});
+  ASSERT_TRUE(f1->isPlanar());
+
+  // Faces must be planar
+  ASSERT_DEATH(
+      {
+        Face::create({v0, v1, v2}, {0, 1 / std::sqrt(2), 1 / std::sqrt(2)});
+      },
+      "Assertion failed*");
+  ASSERT_DEATH(
+      {
+        Face::create({v0, v1, v2, v4}, {0, 0, 1});
+      },
+      "Assertion failed*");
+}
+
+TEST(Geometry, FaceArea) {
+  VertexPtr v0 = Vertex::create({0, 0, 0});
+  VertexPtr v1 = Vertex::create({1, 0, 0});
+  VertexPtr v2 = Vertex::create({0, 1, 0});
+  VertexPtr v3 = Vertex::create({2, 1, 0});
+  FacePtr f0 = Face::create({v0, v1, v2}, {0, 0, 1});
+  FacePtr f1 = Face::create({v0, v3, v2}, {0, 0, 1});
+  FacePtr f2 = Face::create({v0, v1, v3, v2}, {0, 0, 1});
+  ASSERT_FLOAT_EQ(f0->getArea(), 0.5);
+  ASSERT_FLOAT_EQ(f1->getArea(), 1.0);
+  ASSERT_FLOAT_EQ(f2->getArea(), 1.5);
+
+  // Cannot create faces with negative area, indicates problem with handedness
+  // of order of points
+  EXPECT_DEATH(
+      {
+        Face::create({v0, v2, v3}, {0, 0, 1});
+      },
+      "Assertion failed *");
 }
 
 TEST(Geometry, LineIntersection) {
@@ -141,4 +169,20 @@ TEST(Geometry, PolygonSelfIntersection) {
   std::vector<Vec2> points3 = {{0, 0}, {3, 1}, {4, 0}, {1, 1}};
   Polygon p3(points3);
   ASSERT_TRUE(p3.isSelfIntersecting());
+}
+
+TEST(Geometry, PolygonArea) {
+  VertexPtr v0 = Vertex::create({0, 0, 0});
+  VertexPtr v1 = Vertex::create({1, 0, 0});
+  VertexPtr v2 = Vertex::create({0, 1, 0});
+  VertexPtr v3 = Vertex::create({0, 0, 1});
+  FacePtr f0 = Face::create({v0, v2, v1}, {0, 0, -1});
+  FacePtr f1 = Face::create({v0, v1, v3}, {0, -1, 0});
+  FacePtr f2 = Face::create({v0, v3, v2}, {-1, 0, 0});
+  FacePtr f3 = Face::create(
+      {v1, v2, v3}, {1 / std::sqrt(3), 1 / std::sqrt(3), 1 / std::sqrt(3)});
+  ASSERT_FLOAT_EQ(Polygon(f0).getArea(), f0->getArea());
+  ASSERT_FLOAT_EQ(Polygon(f1).getArea(), f1->getArea());
+  ASSERT_FLOAT_EQ(Polygon(f2).getArea(), f2->getArea());
+  ASSERT_FLOAT_EQ(Polygon(f3).getArea(), f3->getArea());
 }
