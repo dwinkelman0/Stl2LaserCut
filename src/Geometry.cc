@@ -166,14 +166,14 @@ BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
   if ((std::get<0>(b1) == std::get<0>(b2) &&
        std::get<1>(b1) < std::get<1>(b2)) ||
       std::get<0>(b1) < std::get<0>(b2)) {
-    lowerBound_ = b1;
-    upperBound_ = b2;
     direction_ = true;
   } else {
-    lowerBound_ = b2;
-    upperBound_ = b1;
     direction_ = false;
   }
+  lowerBound_ = {std::min(std::get<0>(b1), std::get<0>(b2)),
+                 std::min(std::get<1>(b1), std::get<1>(b2))};
+  upperBound_ = {std::max(std::get<0>(b1), std::get<0>(b2)),
+                 std::max(std::get<1>(b1), std::get<1>(b2))};
   auto result =
       Line(std::get<0>(b1), std::get<1>(b1), 1, true)
           .getIntersection(Line(std::get<0>(b2), std::get<1>(b2), 1, true));
@@ -185,8 +185,8 @@ BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
       a_ = 0;
       b_ = 1;
     } else {
-      a_ = std::get<0>(b1) - std::get<0>(b2);
-      b_ = std::get<1>(b2) - std::get<1>(b1);
+      a_ = std::get<1>(b2) - std::get<1>(b1);
+      b_ = std::get<0>(b1) - std::get<0>(b2);
     }
     c_ = 0;
   } else {
@@ -195,6 +195,7 @@ BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
     c_ = 1;
   }
   assert(std::get<0>(lowerBound_) <= std::get<0>(upperBound_));
+  assert(std::get<1>(lowerBound_) <= std::get<1>(upperBound_));
 }
 
 std::optional<Vec2> BoundedLine::getBoundedIntersection(
@@ -204,7 +205,11 @@ std::optional<Vec2> BoundedLine::getBoundedIntersection(
     float x = std::get<0>(*result);
     float y = std::get<1>(*result);
     if (std::get<0>(lowerBound_) <= x && x <= std::get<0>(upperBound_) &&
-        std::get<1>(lowerBound_) <= y && y <= std::get<1>(upperBound_)) {
+        std::get<1>(lowerBound_) <= y && y <= std::get<1>(upperBound_) &&
+        std::get<0>(other.lowerBound_) <= x &&
+        x <= std::get<0>(other.upperBound_) &&
+        std::get<1>(other.lowerBound_) <= y &&
+        y <= std::get<1>(other.upperBound_)) {
       return result;
     } else {
       return std::nullopt;
@@ -248,7 +253,7 @@ bool Polygon::isSelfIntersecting() const {
   for (uint32_t i = 0; i < lines.size(); ++i) {
     for (uint32_t j = i + 2; j < std::min(lines.size(), lines.size() - 1 + i);
          ++j) {
-      if (lines[i].getIntersection(lines[j])) {
+      if (lines[i].getBoundedIntersection(lines[j])) {
         return true;
       }
     }

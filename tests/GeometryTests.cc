@@ -86,7 +86,7 @@ TEST(Geometry, BoundedLine) {
   ASSERT_TRUE(c1.getPossibleEquality(l1));
 
   BoundedLine l2({-2, -1}, {2, 1});
-  Line c2(2, -1, 0, true);
+  Line c2(1, -2, 0, true);
   ASSERT_TRUE(c2.getPossibleEquality(l2));
 
   BoundedLine l3({5, 0}, {5, 6});
@@ -100,6 +100,29 @@ TEST(Geometry, BoundedLine) {
   BoundedLine l5({0, 0}, {1, 0});
   Line c5(0, 1, 0, true);
   ASSERT_TRUE(c5.getPossibleEquality(l5));
+
+  BoundedLine l6({0, 1}, {0, 0});
+  Line c6(1, 0, 0, true);
+  ASSERT_TRUE(c6.getPossibleEquality(l6));
+}
+
+TEST(Geometry, BoundedLineIntersection) {
+  BoundedLine l0({2, 0}, {0, 2});
+  BoundedLine l1({0, 0}, {1, 1});
+  BoundedLine l2({-1, -1}, {0, 0});
+  BoundedLine l3({3, 1}, {1, 3});
+
+  ASSERT_TRUE(l0.getBoundedIntersection(l1));
+  ASSERT_TRUE(l1.getBoundedIntersection(l0));
+
+  ASSERT_FALSE(l0.getBoundedIntersection(l2));
+  ASSERT_FALSE(l2.getBoundedIntersection(l0));
+
+  ASSERT_FALSE(l0.getBoundedIntersection(l3));
+  ASSERT_FALSE(l3.getBoundedIntersection(l0));
+
+  ASSERT_FALSE(l1.getBoundedIntersection(l2));
+  ASSERT_FALSE(l2.getBoundedIntersection(l1));
 }
 
 TEST(Geometry, PolygonSelfIntersection) {
@@ -110,4 +133,12 @@ TEST(Geometry, PolygonSelfIntersection) {
   std::vector<Vec2> points1 = {{0, 0}, {1, 1}, {1, 0}, {0, 1}};
   Polygon p1(points1);
   ASSERT_TRUE(p1.isSelfIntersecting());
+
+  std::vector<Vec2> points2 = {{0, 0}, {4, 0}, {3, 1}, {1, 1}};
+  Polygon p2(points2);
+  ASSERT_FALSE(p2.isSelfIntersecting());
+
+  std::vector<Vec2> points3 = {{0, 0}, {3, 1}, {4, 0}, {1, 1}};
+  Polygon p3(points3);
+  ASSERT_TRUE(p3.isSelfIntersecting());
 }
