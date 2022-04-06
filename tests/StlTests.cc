@@ -16,18 +16,24 @@ TEST(Stl, FacesFromTrianglePartition) {
       facesFromTrianglePartition({0, 0, 1}, {{v0, v1, v2}});
   ASSERT_EQ(f0.size(), 1);
 
-  // Test simple quadrilateral
+  // Test simple quadrilateral (2-vertex insert)
   VertexPtr v3 = Vertex::create({1, 1, 0});
   std::vector<FacePtr> f1 =
       facesFromTrianglePartition({0, 0, 1}, {{v0, v1, v2}, {v1, v3, v2}});
   ASSERT_EQ(f1.size(), 1);
 
-  // Test two triangles with same normal
+  // Test two triangles with same normal (new chain)
   VertexPtr v4 = Vertex::create({2, 1, 0});
   VertexPtr v5 = Vertex::create({1, 2, 0});
 
-  // Test two triangles with single overlapping point
+  // Test two triangles with single overlapping point (1-vertex insert)
   std::vector<FacePtr> f3 =
       facesFromTrianglePartition({0, 0, 1}, {{v0, v1, v2}, {v2, v4, v5}});
   ASSERT_EQ(f3.size(), 2);
+
+  // Test three triangles with three overlapping points (3-vertex insert)
+  std::vector<FacePtr> f4 = facesFromTrianglePartition(
+      {0, 0, 1}, {{v1, v4, v3}, {v3, v4, v5}, {v1, v3, v2}, {v2, v3, v5}});
+  ASSERT_EQ(f4.size(), 1);
+  ASSERT_EQ(f4.front()->getVertices().size(), 4);
 }

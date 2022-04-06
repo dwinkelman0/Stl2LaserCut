@@ -130,8 +130,6 @@ bool Face::isPlanar() const {
       product = product / abs(product);
       float alignment = abs(dot(product, normal_));
       if (abs(alignment - 1) > 1e-6) {
-        std::cout << i << std::endl;
-        std::cout << "Alignment: " << abs(alignment - 1) << std::endl;
         return false;
       }
     } else {

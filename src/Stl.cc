@@ -4,7 +4,11 @@
 
 struct VertexPtrComparator {
   bool operator()(const VertexPtr &a, const VertexPtr &b) const {
-    return a->getVector() < b->getVector();
+    if (abs(a->getVector() - b->getVector()) < 1e-6) {
+      return false;
+    } else {
+      return a->getVector() < b->getVector();
+    }
   }
 };
 
@@ -34,6 +38,21 @@ std::vector<FacePtr> facesFromTrianglePartition(
   // TODO: algorithm is currently O(n^2), can make O(n log n)
   // TODO: can use std::list for chain instead of std::vector
   std::vector<std::vector<VertexPtr>> chains;
+
+  // Attempt to find three adjacent vertices found in the triangle
+  std::function tryThreeVertexInsert =
+      [&chains](const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
+        auto &[v0, v1, v2] = triangle;
+        for (std::vector<VertexPtr> &chain : chains) {
+          for (uint32_t i = 0; i < chain.size() - 2; ++i) {
+            if (chain[i] == v2 && chain[i + 1] == v1 && chain[i + 2] == v0) {
+              chain.erase(chain.begin() + i + 1);
+              return true;
+            }
+          }
+        }
+        return false;
+      };
 
   // Attempt to find two adjacent vertices found in the triangle
   std::function tryTwoVertexInsert =
@@ -69,7 +88,10 @@ std::vector<FacePtr> facesFromTrianglePartition(
 
   // If the triangle cannot be inserted into an exiting chain, make a new one
   for (const auto &[v0, v1, v2] : triangles) {
-    if (!tryTwoVertexInsert({v0, v1, v2}) &&
+    if (!tryThreeVertexInsert({v0, v1, v2}) &&
+        !tryThreeVertexInsert({v1, v2, v0}) &&
+        !tryThreeVertexInsert({v2, v0, v1}) &&
+        !tryTwoVertexInsert({v0, v1, v2}) &&
         !tryTwoVertexInsert({v1, v2, v0}) &&
         !tryTwoVertexInsert({v2, v0, v1}) &&
         !tryOneVertexInsert({v0, v1, v2}) &&
