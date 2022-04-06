@@ -42,7 +42,6 @@ std::vector<FacePtr> facesFromTrianglePartition(
         for (std::vector<VertexPtr> &chain : chains) {
           for (uint32_t i = 0; i < chain.size() - 1; ++i) {
             if (chain[i] == v0 && chain[i + 1] == v2) {
-              std::cout << "2-vertex insert" << std::endl;
               chain.insert(chain.begin() + i + 1, v1);
               return true;
             }
@@ -58,7 +57,6 @@ std::vector<FacePtr> facesFromTrianglePartition(
         for (std::vector<VertexPtr> &chain : chains) {
           for (uint32_t i = 0; i < chain.size(); ++i) {
             if (chain[i] == v0) {
-              std::cout << "1-vertex insert" << std::endl;
               chain.insert(chain.begin() + i, v2);
               chain.insert(chain.begin() + i, v1);
               chain.insert(chain.begin() + i, v0);
@@ -77,7 +75,6 @@ std::vector<FacePtr> facesFromTrianglePartition(
         !tryOneVertexInsert({v0, v1, v2}) &&
         !tryOneVertexInsert({v1, v2, v0}) &&
         !tryOneVertexInsert({v2, v0, v1})) {
-      std::cout << "new chain insert" << std::endl;
       chains.push_back({v0, v1, v2, v0});
     }
   }
@@ -93,7 +90,6 @@ std::vector<FacePtr> facesFromTrianglePartition(
           for (uint32_t j = i + 3; j < chain.size(); ++j) {
             if (chain[i] == chain[j]) {
               if (j - i < end - begin) {
-                std::cout << i << " -> " << j << std::endl;
                 begin = chain.begin() + i;
                 end = chain.begin() + j;
               }
@@ -113,8 +109,14 @@ std::vector<FacePtr> facesFromTrianglePartition(
     std::vector<VertexPtr> remainder(chain);
     while (remainder.size() > 1) {
       const auto [subchain, newRemainder] = smallestClosedShapeFunc(remainder);
-      std::cout << "subchain: " << subchain.size() << std::endl;
       output.push_back(Face::create(subchain, normal));
+      if (!output.back()) {
+        std::cout << "[WARNING] Failed to make face: ";
+        for (const VertexPtr &vertex : subchain) {
+          std::cout << vertex->getVector() << ", ";
+        }
+        std::cout << ";  normal: " << normal << std::endl;
+      }
       remainder = newRemainder;
     }
   }
@@ -125,6 +127,46 @@ std::vector<FacePtr> facesFromTriangles(
     const Vec3 &normal,
     const std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>> &triangles) {
   // Create partitions, i.e. groups of triangles with common vertices
+  std::vector<FacePtr> output;
+  std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>> remainingTriangles(
+      triangles);
+  while (!remainingTriangles.empty()) {
+    std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>>
+        newRemainingTriangles;
+    std::set<VertexPtr> vertexSet;
+    std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>> currentTriangles;
+    std::function addTriangleToVertexSetFunc =
+        [&vertexSet, &currentTriangles](
+            const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle,
+            bool force) {
+          const auto &[v0, v1, v2] = triangle;
+          if (vertexSet.find(v0) != vertexSet.end() ||
+              vertexSet.find(v1) != vertexSet.end() ||
+              vertexSet.find(v2) != vertexSet.end() || force) {
+            vertexSet.insert(v0);
+            vertexSet.insert(v1);
+            vertexSet.insert(v2);
+            currentTriangles.push_back(triangle);
+            return true;
+          } else {
+            return false;
+          }
+        };
+    bool initialInsertSuccess =
+        addTriangleToVertexSetFunc(remainingTriangles.back(), true);
+    assert(initialInsertSuccess);
+    remainingTriangles.pop_back();
+    for (const auto &triangle : remainingTriangles) {
+      if (!addTriangleToVertexSetFunc(triangle, false)) {
+        newRemainingTriangles.push_back(triangle);
+      }
+    }
+    std::vector<FacePtr> newFaces =
+        facesFromTrianglePartition(normal, currentTriangles);
+    output.insert(output.end(), newFaces.begin(), newFaces.end());
+    remainingTriangles = newRemainingTriangles;
+  }
+  return output;
 }
 
 std::vector<FacePtr> loadFacesFromStl(std::ifstream &inputFile) {
@@ -142,6 +184,7 @@ std::vector<FacePtr> loadFacesFromStl(std::ifstream &inputFile) {
   };
   std::string inputText;
   std::getline(inputFile, inputText);
+  uint32_t numTriangles = 0;
   while (true) {
     inputFile >> inputText;
     if (inputText == "endsolid") {
@@ -167,9 +210,8 @@ std::vector<FacePtr> loadFacesFromStl(std::ifstream &inputFile) {
         normal, std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>>());
     it->second.emplace_back(newVertexFunc(v0), newVertexFunc(v1),
                             newVertexFunc(v2));
+    ++numTriangles;
   }
-  std::cout << normalMap.size() << " normals" << std::endl;
-  std::cout << vertexSet.size() << " vertices" << std::endl;
 
   // Coalesce triangles into faces
   std::vector<FacePtr> output;
@@ -177,6 +219,13 @@ std::vector<FacePtr> loadFacesFromStl(std::ifstream &inputFile) {
     std::vector<FacePtr> faces = facesFromTriangles(normal, triangles);
     output.insert(output.end(), faces.begin(), faces.end());
   }
-  std::cout << output.size() << " faces" << std::endl;
+  for (const FacePtr &face : output) {
+    if (!face) {
+      std::cout << "Found null face" << std::endl;
+    }
+  }
+  std::cout << "STL summary: " << numTriangles << " triangles, "
+            << normalMap.size() << " normals, " << vertexSet.size()
+            << " vertices, " << output.size() << " faces" << std::endl;
   return output;
 }
