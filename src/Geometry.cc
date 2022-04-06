@@ -122,16 +122,20 @@ void Face::link() {
 }
 
 bool Face::isPlanar() const {
-  Vec3 basisEdge = vertices_[1]->getVector() - vertices_[0]->getVector();
   for (uint32_t i = 2; i < vertices_.size(); ++i) {
+    Vec3 basisEdge = vertices_[i - 1]->getVector() - vertices_[0]->getVector();
     Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
     Vec3 product = cross(basisEdge, secondEdge);
-    product = product / abs(product);
     if (abs(product) > 0) {
-      float alignment = dot(product, normal_);
+      product = product / abs(product);
+      float alignment = abs(dot(product, normal_));
       if (abs(alignment - 1) > 1e-6) {
+        std::cout << i << std::endl;
+        std::cout << "Alignment: " << abs(alignment - 1) << std::endl;
         return false;
       }
+    } else {
+      return false;
     }
   }
   return true;

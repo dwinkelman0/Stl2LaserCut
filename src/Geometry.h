@@ -80,7 +80,11 @@ class Face : public std::enable_shared_from_this<Face> {
  public:
   static FacePtr create(const std::vector<VertexPtr> &vertices,
                         const Vec3 &normal) {
-    return FacePtr(new Face(vertices, normal));
+    FacePtr output(new Face(vertices, normal));
+    if (output->getArea() <= 0 || !output->isPlanar()) {
+      return nullptr;
+    }
+    return output;
   }
 
   void link();
@@ -96,8 +100,6 @@ class Face : public std::enable_shared_from_this<Face> {
   Face(const std::vector<VertexPtr> &vertices, const Vec3 &normal)
       : vertices_(vertices), normal_(normal / abs(normal)) {
     assert(vertices_.size() >= 3);
-    assert(getArea() > 0);
-    assert(isPlanar());
   }
 
  private:

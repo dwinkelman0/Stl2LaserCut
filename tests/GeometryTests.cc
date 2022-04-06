@@ -9,22 +9,21 @@ TEST(Geometry, FaceIsPlanar) {
   VertexPtr v2 = Vertex::create({0, 1, 0});
   VertexPtr v3 = Vertex::create({3, 4, 0});
   VertexPtr v4 = Vertex::create({0, 1, 1});
+  VertexPtr v5 = Vertex::create({-1, -1, 0});
   FacePtr f0 = Face::create({v0, v1, v2}, {0, 0, 1});
+  ASSERT_TRUE(f0);
   ASSERT_TRUE(f0->isPlanar());
   FacePtr f1 = Face::create({v0, v1, v3, v2}, {0, 0, 1});
+  ASSERT_TRUE(f1);
   ASSERT_TRUE(f1->isPlanar());
+  FacePtr f2 = Face::create({v5, v0, v1, v2}, {0, 0, 1});
+  ASSERT_TRUE(f2);
+  ASSERT_TRUE(f2->isPlanar());
 
   // Faces must be planar
-  ASSERT_DEATH(
-      {
-        Face::create({v0, v1, v2}, {0, 1 / std::sqrt(2), 1 / std::sqrt(2)});
-      },
-      "Assertion failed*");
-  ASSERT_DEATH(
-      {
-        Face::create({v0, v1, v2, v4}, {0, 0, 1});
-      },
-      "Assertion failed*");
+  ASSERT_FALSE(
+      Face::create({v0, v1, v2}, {0, 1 / std::sqrt(2), 1 / std::sqrt(2)}));
+  ASSERT_FALSE(Face::create({v0, v1, v2, v4}, {0, 0, 1}));
 }
 
 TEST(Geometry, FaceArea) {
@@ -41,11 +40,7 @@ TEST(Geometry, FaceArea) {
 
   // Cannot create faces with negative area, indicates problem with handedness
   // of order of points
-  EXPECT_DEATH(
-      {
-        Face::create({v0, v2, v3}, {0, 0, 1});
-      },
-      "Assertion failed *");
+  ASSERT_FALSE(Face::create({v0, v2, v3}, {0, 0, 1}));
 }
 
 TEST(Geometry, LineIntersection) {
