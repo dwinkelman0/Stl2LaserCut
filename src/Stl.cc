@@ -37,18 +37,17 @@ std::vector<FacePtr> facesFromTrianglePartition(
     const std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>> &triangles) {
   // TODO: algorithm is currently O(n^2), can make O(n log n)
   // TODO: can use std::list for chain instead of std::vector
-  std::vector<std::vector<VertexPtr>> chains;
+  std::vector<VertexPtr> chain;
+  std::set<VertexPtr> vertexSet;
 
   // Attempt to find three adjacent vertices found in the triangle
   std::function tryThreeVertexInsert =
-      [&chains](const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
+      [&chain](const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
         auto &[v0, v1, v2] = triangle;
-        for (std::vector<VertexPtr> &chain : chains) {
-          for (uint32_t i = 0; i < chain.size() - 2; ++i) {
-            if (chain[i] == v2 && chain[i + 1] == v1 && chain[i + 2] == v0) {
-              chain.erase(chain.begin() + i + 1);
-              return true;
-            }
+        for (uint32_t i = 0; i < chain.size() - 2; ++i) {
+          if (chain[i] == v2 && chain[i + 1] == v1 && chain[i + 2] == v0) {
+            chain.erase(chain.begin() + i + 1);
+            return true;
           }
         }
         return false;
@@ -56,14 +55,14 @@ std::vector<FacePtr> facesFromTrianglePartition(
 
   // Attempt to find two adjacent vertices found in the triangle
   std::function tryTwoVertexInsert =
-      [&chains](const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
+      [&chain, &vertexSet](
+          const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
         auto &[v0, v1, v2] = triangle;
-        for (std::vector<VertexPtr> &chain : chains) {
-          for (uint32_t i = 0; i < chain.size() - 1; ++i) {
-            if (chain[i] == v0 && chain[i + 1] == v2) {
-              chain.insert(chain.begin() + i + 1, v1);
-              return true;
-            }
+        for (uint32_t i = 0; i < chain.size() - 1; ++i) {
+          if (chain[i] == v0 && chain[i + 1] == v2) {
+            vertexSet.insert(v1);
+            chain.insert(chain.begin() + i + 1, v1);
+            return true;
           }
         }
         return false;
@@ -71,34 +70,56 @@ std::vector<FacePtr> facesFromTrianglePartition(
 
   // Attempt to find one vertex found in the triangle
   std::function tryOneVertexInsert =
-      [&chains](const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
+      [&chain, &vertexSet](
+          const std::tuple<VertexPtr, VertexPtr, VertexPtr> &triangle) {
         auto &[v0, v1, v2] = triangle;
-        for (std::vector<VertexPtr> &chain : chains) {
-          for (uint32_t i = 0; i < chain.size(); ++i) {
-            if (chain[i] == v0) {
-              chain.insert(chain.begin() + i, v2);
-              chain.insert(chain.begin() + i, v1);
-              chain.insert(chain.begin() + i, v0);
-              return true;
-            }
+        for (uint32_t i = 0; i < chain.size(); ++i) {
+          if (chain[i] == v0) {
+            vertexSet.insert(v1);
+            vertexSet.insert(v2);
+            chain.insert(chain.begin() + i, v2);
+            chain.insert(chain.begin() + i, v1);
+            chain.insert(chain.begin() + i, v0);
+            return true;
           }
         }
         return false;
       };
 
   // If the triangle cannot be inserted into an exiting chain, make a new one
-  for (const auto &[v0, v1, v2] : triangles) {
-    if (!tryThreeVertexInsert({v0, v1, v2}) &&
-        !tryThreeVertexInsert({v1, v2, v0}) &&
-        !tryThreeVertexInsert({v2, v0, v1}) &&
-        !tryTwoVertexInsert({v0, v1, v2}) &&
-        !tryTwoVertexInsert({v1, v2, v0}) &&
-        !tryTwoVertexInsert({v2, v0, v1}) &&
-        !tryOneVertexInsert({v0, v1, v2}) &&
-        !tryOneVertexInsert({v1, v2, v0}) &&
-        !tryOneVertexInsert({v2, v0, v1})) {
-      chains.push_back({v0, v1, v2, v0});
+  std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>> remainingTriangles(
+      triangles);
+  chain.push_back(std::get<0>(triangles.back()));
+  chain.push_back(std::get<1>(triangles.back()));
+  chain.push_back(std::get<2>(triangles.back()));
+  chain.push_back(std::get<0>(triangles.back()));
+  vertexSet.insert(std::get<0>(triangles.back()));
+  vertexSet.insert(std::get<1>(triangles.back()));
+  vertexSet.insert(std::get<2>(triangles.back()));
+  remainingTriangles.pop_back();
+  while (!remainingTriangles.empty()) {
+    std::vector<std::tuple<VertexPtr, VertexPtr, VertexPtr>>
+        newRemainingTriangles;
+    for (const auto &[v0, v1, v2] : remainingTriangles) {
+      if (vertexSet.find(v0) != vertexSet.end() ||
+          vertexSet.find(v1) != vertexSet.end() ||
+          vertexSet.find(v2) != vertexSet.end()) {
+        if (!tryThreeVertexInsert({v0, v1, v2}) &&
+            !tryThreeVertexInsert({v1, v2, v0}) &&
+            !tryThreeVertexInsert({v2, v0, v1}) &&
+            !tryTwoVertexInsert({v0, v1, v2}) &&
+            !tryTwoVertexInsert({v1, v2, v0}) &&
+            !tryTwoVertexInsert({v2, v0, v1}) &&
+            !tryOneVertexInsert({v0, v1, v2}) &&
+            !tryOneVertexInsert({v1, v2, v0}) &&
+            !tryOneVertexInsert({v2, v0, v1})) {
+          std::cout << "There has been a major problem" << std::endl;
+        }
+      } else {
+        newRemainingTriangles.push_back({v0, v1, v2});
+      }
     }
+    remainingTriangles = newRemainingTriangles;
   }
 
   // Try to find the smallest closed shape within a chain
@@ -109,7 +130,7 @@ std::vector<FacePtr> facesFromTrianglePartition(
         std::vector<VertexPtr>::const_iterator begin = chain.begin(),
                                                end = chain.end() - 1;
         for (uint32_t i = 0; i < chain.size(); ++i) {
-          for (uint32_t j = i + 3; j < chain.size(); ++j) {
+          for (uint32_t j = i + 1; j < chain.size(); ++j) {
             if (chain[i] == chain[j]) {
               if (j - i < end - begin) {
                 begin = chain.begin() + i;
@@ -127,20 +148,18 @@ std::vector<FacePtr> facesFromTrianglePartition(
       };
 
   std::vector<FacePtr> output;
-  for (const std::vector<VertexPtr> &chain : chains) {
-    std::vector<VertexPtr> remainder(chain);
-    while (remainder.size() > 1) {
-      const auto [subchain, newRemainder] = smallestClosedShapeFunc(remainder);
-      output.push_back(Face::create(subchain, normal));
-      if (!output.back()) {
-        std::cout << "[WARNING] Failed to make face: ";
-        for (const VertexPtr &vertex : subchain) {
-          std::cout << vertex->getVector() << ", ";
-        }
-        std::cout << ";  normal: " << normal << std::endl;
+  std::vector<VertexPtr> remainder(chain);
+  while (remainder.size() > 1) {
+    const auto [subchain, newRemainder] = smallestClosedShapeFunc(remainder);
+    output.push_back(Face::create(subchain, normal));
+    if (!output.back()) {
+      std::cout << "[WARNING] Failed to make face: ";
+      for (const VertexPtr &vertex : subchain) {
+        std::cout << vertex->getVector() << ", ";
       }
-      remainder = newRemainder;
+      std::cout << ";  normal: " << normal << std::endl;
     }
+    remainder = newRemainder;
   }
   return output;
 }
