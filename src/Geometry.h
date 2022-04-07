@@ -24,10 +24,13 @@ using Vec3 = std::tuple<float, float, float>;
 Vec3 operator-(const Vec3 vec);
 Vec2 operator-(const Vec2 vec1, const Vec2 vec2);
 Vec3 operator-(const Vec3 vec1, const Vec3 vec2);
+Vec2 operator/(const Vec2 vec, const float x);
 Vec3 operator/(const Vec3 vec, const float x);
+float dot(const Vec2 vec1, const Vec2 vec2);
 float dot(const Vec3 vec1, const Vec3 vec2);
 float cross(const Vec2 vec1, const Vec2 vec2);
 Vec3 cross(const Vec3 vec1, const Vec3 vec2);
+float abs(const Vec2 vec);
 float abs(const Vec3 vec);
 float angle(const Vec3 vec1, const Vec3 vec2);
 Vec3 rotateX(const Vec3 vec, const float angle);
@@ -115,6 +118,7 @@ class Line {
   std::optional<Vec2> getIntersection(const Line &other) const;
   Line getOffsetLine(const float offset) const;
   bool getPossibleEquality(const Line &other) const;
+  Line getPerpendicularLine(const Vec2 &point) const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);
 
@@ -140,10 +144,19 @@ class Polygon {
   Polygon(const std::vector<Vec2> &points) : points_(points) {}
   Polygon(const FacePtr &face);
 
+  enum class OffsetStatus { SUCCESS, NEGATIVE_AREA, SELF_INTERSECTING };
+
+  inline std::vector<Vec2> getPoints() const { return points_; }
   bool isSelfIntersecting() const;
   float getArea() const;
+  std::pair<Polygon, OffsetStatus> createPolygonWithOffset(
+      const float offset) const;
+
+  friend std::ostream &operator<<(std::ostream &os, const Polygon &polygon);
 
  private:
+  std::vector<BoundedLine> getLines() const;
+
   std::vector<Vec2> points_;
 };
 

@@ -181,3 +181,33 @@ TEST(Geometry, PolygonArea) {
   ASSERT_FLOAT_EQ(Polygon(f2).getArea(), f2->getArea());
   ASSERT_FLOAT_EQ(Polygon(f3).getArea(), f3->getArea());
 }
+
+TEST(Geometry, PolygonOffset) {
+  // Basic triangle
+  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
+  Polygon p0(points0);
+  auto [bigger0, s00] = p0.createPolygonWithOffset(0.5);
+  ASSERT_EQ(s00, Polygon::OffsetStatus::SUCCESS);
+  ASSERT_GT(bigger0.getArea(), p0.getArea());
+  auto [smaller0, s01] = p0.createPolygonWithOffset(-0.2);
+  ASSERT_EQ(s01, Polygon::OffsetStatus::SUCCESS);
+  ASSERT_LT(smaller0.getArea(), p0.getArea());
+  auto [negativeArea, s02] = p0.createPolygonWithOffset(-1);
+  ASSERT_EQ(s02, Polygon::OffsetStatus::NEGATIVE_AREA);
+
+  // Quadrilateral with 3 points in a line
+  std::vector<Vec2> points1 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
+  Polygon p1(points1);
+  auto [bigger1, s10] = p1.createPolygonWithOffset(0.5);
+  ASSERT_EQ(s10, Polygon::OffsetStatus::SUCCESS);
+  ASSERT_GT(bigger1.getArea(), p1.getArea());
+  auto [smaller1, s11] = p1.createPolygonWithOffset(-0.2);
+  ASSERT_EQ(s11, Polygon::OffsetStatus::SUCCESS);
+  ASSERT_LT(smaller1.getArea(), p1.getArea());
+
+  // Quadrilateral whose offset is self-intersecting
+  std::vector<Vec2> points2 = {{0, 0}, {5, 0}, {5, 1.5}, {0, 3}};
+  Polygon p2(points2);
+  auto [smaller2, s20] = p2.createPolygonWithOffset(-1);
+  ASSERT_EQ(s20, Polygon::OffsetStatus::SELF_INTERSECTING);
+}
