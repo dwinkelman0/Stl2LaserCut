@@ -20,6 +20,7 @@ class Face;
 using FacePtr = std::shared_ptr<Face>;
 using Vec2 = std::tuple<float, float>;
 using Vec3 = std::tuple<float, float, float>;
+class LaserCutRenderer;
 
 Vec3 operator-(const Vec3 vec);
 Vec2 operator-(const Vec2 vec1, const Vec2 vec2);
@@ -47,8 +48,9 @@ class Vertex : public std::enable_shared_from_this<Vertex> {
   void link(const FacePtr &face, const VertexPtr &other);
 
   inline Vec3 getVector() const { return vec_; }
+  EdgePtr getEdge(const VertexPtr other) const;
 
-  friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
+  friend std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
  protected:
   Vertex(const Vec3 vec) : vec_(vec) {}
@@ -66,11 +68,15 @@ class Edge : public std::enable_shared_from_this<Edge> {
     return EdgePtr(new Edge(v1, v2));
   }
 
+  inline std::pair<VertexPtr, VertexPtr> getVertices() const {
+    return {v1_, v2_};
+  }
   float getAngle() const;
   bool isConvex() const;
 
  protected:
-  Edge(const VertexPtr &v1, const VertexPtr &v2) : v1_(v1), v2_(v2) {}
+  Edge(const VertexPtr &v1, const VertexPtr &v2)
+      : v1_(v1), v2_(v2), leftFace_(nullptr), rightFace_(nullptr) {}
 
  private:
   VertexPtr v1_;
@@ -81,6 +87,12 @@ class Edge : public std::enable_shared_from_this<Edge> {
 
 class Face : public std::enable_shared_from_this<Face> {
  public:
+  struct BaselineEdge {
+    float length;
+    float horizontalOffset;
+    float verticalOffset;
+  };
+
   static FacePtr create(const std::vector<VertexPtr> &vertices,
                         const Vec3 &normal) {
     FacePtr output(new Face(vertices, normal));
@@ -97,7 +109,9 @@ class Face : public std::enable_shared_from_this<Face> {
   bool isPlanar() const;
   float getArea() const;
 
-  friend std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
+  void generateBaselineEdges(const LaserCutRenderer &renderer);
+
+  friend std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
  protected:
   Face(const std::vector<VertexPtr> &vertices, const Vec3 &normal)
@@ -105,9 +119,12 @@ class Face : public std::enable_shared_from_this<Face> {
     assert(vertices_.size() >= 3);
   }
 
+  std::vector<EdgePtr> getEdges() const;
+
  private:
   std::vector<VertexPtr> vertices_;
   Vec3 normal_;
+  std::vector<std::vector<BaselineEdge>> baselineEdges_;
 };
 
 class Line {
@@ -160,4 +177,4 @@ class Polygon {
   std::vector<Vec2> points_;
 };
 
-std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
+std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);

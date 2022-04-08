@@ -1,5 +1,6 @@
 // Copyright 2022 by Daniel Winkelman. All rights reserved.
 
+#include <LaserCut.h>
 #include <Stl.h>
 
 #include <cmath>
@@ -7,8 +8,13 @@
 #include <numbers>
 
 int main() {
+  LaserCutRenderer renderer({4, 0, 3, 2, {400, 400}});
   auto inputFile =
       std::ifstream("/Users/dwinkelman/Downloads/thinker_ascii.stl");
-  loadFacesFromStl(inputFile);
+  std::vector<FacePtr> faces = loadFacesFromStl(inputFile);
+  std::vector<EdgePtr> edges = collectEdges(faces);
+  for (const FacePtr &face : faces) {
+    face->generateBaselineEdges(renderer);
+  }
   return 0;
 }

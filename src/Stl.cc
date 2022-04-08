@@ -284,8 +284,13 @@ std::vector<FacePtr> loadFacesFromStl(std::ifstream &inputFile) {
       face->link();
     }
   }
+  std::vector<EdgePtr> edges = collectEdges(output);
   std::cout << "STL summary: " << numTriangles << " triangles, "
             << normalMap.size() << " normals, " << vertexSet.size()
-            << " vertices, " << output.size() << " faces" << std::endl;
+            << " vertices, " << output.size() << " faces, " << edges.size()
+            << " edges, "
+            << static_cast<int32_t>(output.size() + vertexSet.size()) -
+                   static_cast<int32_t>(edges.size())
+            << " characteristic number" << std::endl;
   return output;
 }

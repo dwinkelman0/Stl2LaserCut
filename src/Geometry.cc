@@ -2,6 +2,8 @@
 
 #include "Geometry.h"
 
+#include <LaserCut.h>
+
 #include <numbers>
 
 Vec3 operator-(const Vec3 vec) {
@@ -101,22 +103,25 @@ std::ostream &operator<<(std::ostream &os, const Vec3 &vec) {
 }
 
 void Vertex::link(const FacePtr &face, const VertexPtr &other) {
-  auto newEdge = Edge::create(this->shared_from_this(), other);
-  auto [it1, success1] = edges_.emplace(other, newEdge);
-  auto [it2, success2] =
-      other->edges_.emplace(this->shared_from_this(), newEdge);
+  auto [it1, success1] =
+      edges_.emplace(other, Edge::create(this->shared_from_this(), other));
+  auto [it2, success2] = other->edges_.emplace(
+      this->shared_from_this(), Edge::create(other, this->shared_from_this()));
   assert(success1 == success2);
-  if (success1) {
-    it1->second->leftFace_ = face;
-  } else {
-    it1->second->rightFace_ = face;
-  }
+  it1->second->leftFace_ = face;
+  it2->second->rightFace_ = face;
+}
+
+EdgePtr Vertex::getEdge(const VertexPtr other) const {
+  auto it = edges_.find(other);
+  return it != edges_.end() ? it->second : nullptr;
 }
 
 float Edge::getAngle() const {
   assert(leftFace_);
   assert(rightFace_);
-  return angle(leftFace_->getNormal(), rightFace_->getNormal());
+  return angle(leftFace_->getNormal(), rightFace_->getNormal()) *
+         (isConvex() ? 1 : -1);
 }
 
 bool Edge::isConvex() const {
@@ -166,6 +171,30 @@ float Face::getArea() const {
     }
   }
   return output;
+}
+
+std::vector<EdgePtr> Face::getEdges() const {
+  std::vector<EdgePtr> output;
+  for (uint32_t i = 0; i < vertices_.size() - 1; ++i) {
+    output.push_back(vertices_[i]->getEdge(vertices_[i + 1]));
+  }
+  output.push_back(vertices_.back()->getEdge(vertices_.front()));
+  return output;
+}
+
+void Face::generateBaselineEdges(const LaserCutRenderer &renderer) {
+  baselineEdges_.clear();
+  std::vector<float> angles;
+  for (const EdgePtr &edge : getEdges()) {
+    angles.push_back(edge->getAngle());
+  }
+  std::vector<float> baselineOffsets;
+  for (const float &angle : angles) {
+    baselineOffsets.push_back(renderer.getMaterialBaseLength(angle));
+    std::cout << baselineOffsets.back() << ", ";
+  }
+  std::cout << std::endl;
+  Polygon projection(shared_from_this());
 }
 
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
@@ -373,12 +402,19 @@ std::vector<BoundedLine> Polygon::getLines() const {
   return lines;
 }
 
-std::set<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
-  std::set<EdgePtr> edges;
+std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
+  std::vector<EdgePtr> edges;
+  std::set<std::pair<VertexPtr, VertexPtr>> pairSets;
   for (const FacePtr &face : faces) {
     for (const VertexPtr &vertex : face->vertices_) {
       for (const auto &[other, edge] : vertex->edges_) {
-        edges.insert(edge);
+        const auto [v1, v2] = edge->getVertices();
+        if (pairSets.find({v2, v1}) == pairSets.end() &&
+            pairSets.find({v1, v2}) == pairSets.end()) {
+          pairSets.insert({v1, v2});
+          pairSets.insert({v2, v1});
+          edges.push_back(edge);
+        }
       }
     }
   }
