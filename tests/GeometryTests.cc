@@ -97,6 +97,18 @@ TEST(Geometry, LineOffset) {
   Line l5(0, 1, 0, false);
   Line c5(0, 1, -1, false);
   ASSERT_TRUE(l5.getOffsetLine(1).getPossibleEquality(c5));
+
+  // Different signs
+  Line l6(-1, -1, 1, true);
+  Line c6(-1, -1, 1 - std::sqrt(2), true);
+  std::cout << l6.getOffsetLine(1) << ", " << c6 << std::endl;
+  ASSERT_TRUE(l6.getOffsetLine(1).getPossibleEquality(c6));
+  Line l7(-1, 1, 1, true);
+  Line c7(-1, 1, 2, true);
+  ASSERT_TRUE(l7.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c7));
+  Line l8(1, -1, 1, true);
+  Line c8(1, -1, 0, true);
+  ASSERT_TRUE(l8.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c8));
 }
 
 TEST(Geometry, LinePointComparison) {
@@ -149,11 +161,11 @@ TEST(Geometry, BoundedLine) {
   ASSERT_TRUE(c0.getPossibleEquality(l0));
 
   BoundedLine l1({0, 2}, {2, 0});
-  Line c1(1, 1, 2, true);
+  Line c1(1, 1, 2, false);
   ASSERT_TRUE(c1.getPossibleEquality(l1));
 
   BoundedLine l2({-2, -1}, {2, 1});
-  Line c2(1, -2, 0, true);
+  Line c2(1, -2, 0, false);
   ASSERT_TRUE(c2.getPossibleEquality(l2));
 
   BoundedLine l3({5, 0}, {5, 6});
@@ -161,15 +173,15 @@ TEST(Geometry, BoundedLine) {
   ASSERT_TRUE(c3.getPossibleEquality(l3));
 
   BoundedLine l4({0, 5}, {6, 5});
-  Line c4(0, 1, 5, true);
+  Line c4(0, 1, 5, false);
   ASSERT_TRUE(c4.getPossibleEquality(l4));
 
   BoundedLine l5({0, 0}, {1, 0});
-  Line c5(0, 1, 0, true);
+  Line c5(0, 1, 0, false);
   ASSERT_TRUE(c5.getPossibleEquality(l5));
 
   BoundedLine l6({0, 1}, {0, 0});
-  Line c6(1, 0, 0, true);
+  Line c6(1, 0, 0, false);
   ASSERT_TRUE(c6.getPossibleEquality(l6));
 }
 
@@ -224,36 +236,6 @@ TEST(Geometry, PolygonArea) {
   ASSERT_FLOAT_EQ(Polygon(f1).getArea(), f1->getArea());
   ASSERT_FLOAT_EQ(Polygon(f2).getArea(), f2->getArea());
   ASSERT_FLOAT_EQ(Polygon(f3).getArea(), f3->getArea());
-}
-
-TEST(Geometry, PolygonOffset) {
-  // Basic triangle
-  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
-  Polygon p0(points0);
-  auto [bigger0, s00] = p0.createPolygonWithOffset(0.5);
-  ASSERT_EQ(s00, Polygon::OffsetStatus::SUCCESS);
-  ASSERT_GT(bigger0.getArea(), p0.getArea());
-  auto [smaller0, s01] = p0.createPolygonWithOffset(-0.2);
-  ASSERT_EQ(s01, Polygon::OffsetStatus::SUCCESS);
-  ASSERT_LT(smaller0.getArea(), p0.getArea());
-  auto [negativeArea, s02] = p0.createPolygonWithOffset(-1);
-  ASSERT_EQ(s02, Polygon::OffsetStatus::NEGATIVE_AREA);
-
-  // Quadrilateral with 3 points in a line
-  std::vector<Vec2> points1 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
-  Polygon p1(points1);
-  auto [bigger1, s10] = p1.createPolygonWithOffset(0.5);
-  ASSERT_EQ(s10, Polygon::OffsetStatus::SUCCESS);
-  ASSERT_GT(bigger1.getArea(), p1.getArea());
-  auto [smaller1, s11] = p1.createPolygonWithOffset(-0.2);
-  ASSERT_EQ(s11, Polygon::OffsetStatus::SUCCESS);
-  ASSERT_LT(smaller1.getArea(), p1.getArea());
-
-  // Quadrilateral whose offset is self-intersecting
-  std::vector<Vec2> points2 = {{0, 0}, {5, 0}, {5, 1.5}, {0, 3}};
-  Polygon p2(points2);
-  auto [smaller2, s20] = p2.createPolygonWithOffset(-1);
-  ASSERT_EQ(s20, Polygon::OffsetStatus::SELF_INTERSECTING);
 }
 
 TEST(Geometry, PolygonHandedness) {
