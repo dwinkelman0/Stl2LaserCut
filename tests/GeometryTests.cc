@@ -105,9 +105,11 @@ TEST(Geometry, LineOffset) {
   ASSERT_TRUE(l6.getOffsetLine(1).getPossibleEquality(c6));
   Line l7(-1, 1, 1, true);
   Line c7(-1, 1, 2, true);
+  std::cout << l7.getOffsetLine(std::sqrt(2) / 2) << ", " << c7 << std::endl;
   ASSERT_TRUE(l7.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c7));
   Line l8(1, -1, 1, true);
   Line c8(1, -1, 0, true);
+  std::cout << l8.getOffsetLine(std::sqrt(2) / 2) << ", " << c8 << std::endl;
   ASSERT_TRUE(l8.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c8));
 }
 
@@ -258,8 +260,14 @@ TEST(Geometry, PolygonHandedness) {
   ASSERT_EQ(h2, Polygon::Handedness::RIGHT);
 
   // Basic self-intersecting quadrilateral
-  std::vector<Vec2> points3 = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
-  Polygon p3(points3);
-  Polygon::Handedness h3 = p3.getHandedness();
-  ASSERT_EQ(h3, Polygon::Handedness::NEITHER);
+  // std::vector<Vec2> points3 = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
+  // Polygon p3(points3);
+  // Polygon::Handedness h3 = p3.getHandedness();
+  // ASSERT_EQ(h3, Polygon::Handedness::NEITHER);
+
+  // Non-convex shape
+  std::vector<Vec2> points4 = {{0, 0}, {5, 0}, {5, 5}, {4, 1}};
+  Polygon p4(points4);
+  Polygon::Handedness h4 = p4.getHandedness();
+  ASSERT_EQ(h4, Polygon::Handedness::RIGHT);
 }

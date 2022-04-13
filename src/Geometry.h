@@ -137,7 +137,6 @@ class Line {
   bool getPossibleEquality(const Line &other) const;
   Line getPerpendicularLine(const Vec2 &point) const;
   bool comparePoints(const Vec2 &a, const Vec2 &b) const;
-  bool getAlignmentWith(const Line &other) const;
   Line normalize() const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);

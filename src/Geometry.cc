@@ -263,7 +263,9 @@ bool Line::comparePoints(const Vec2 &a, const Vec2 &b) const {
 
 Line Line::normalize() const {
   float magnitude = std::sqrt(a_ * a_ + b_ * b_);
-  return Line(a_ / magnitude, b_ / magnitude, c_ / magnitude, direction_);
+  float sign = (a_ == 0 ? b_ == 0 ? c_ > 0 : b_ > 0 : a_ > 0) ? 1 : -1;
+  return Line(a_ / magnitude * sign, b_ / magnitude * sign,
+              c_ / magnitude * sign, direction_);
 }
 
 std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {
@@ -363,7 +365,18 @@ Polygon::Polygon(const FacePtr &face) {
 }
 
 bool Polygon::isSelfIntersecting() const {
-  return getHandedness() == Handedness::NEITHER;
+  std::vector<std::optional<BoundedLine>> lines = getLines();
+  for (uint32_t i = 0; i < lines.size(); ++i) {
+    for (uint32_t j = i + 2; j < std::min(lines.size(), lines.size() - 1 + i);
+         ++j) {
+      if (lines[i] && lines[j]) {
+        if (lines[i]->getBoundedIntersection(*lines[j])) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 float Polygon::getArea() const {
@@ -390,28 +403,12 @@ static Vec2 getOffsetPoint(const Line &a, const Line &b, const Vec2 point) {
 }
 
 Polygon::Handedness Polygon::getHandedness() const {
-  bool allRightHanded = true;
-  bool allLeftHanded = true;
-  std::vector<std::optional<BoundedLine>> lines = getLines();
-  for (uint32_t i = 0;
-       i < lines.size() - 1 && (allRightHanded || allLeftHanded); ++i) {
-    if (lines[i] && lines[i + 1]) {
-      Line offsetLine = lines[i]->getOffsetLine(-1);
-      std::optional<Vec2> offsetIntersect =
-          offsetLine.getIntersection(*lines[i + 1]);
-      if (offsetIntersect) {
-        if (lines[i + 1]->comparePoints(points_[i + 1], *offsetIntersect)) {
-          allLeftHanded = false;
-        } else if (lines[i + 1]->comparePoints(*offsetIntersect,
-                                               points_[i + 1])) {
-          allRightHanded = false;
-        }
-      }
-    }
+  float sum = 0;
+  for (uint32_t i = 0; i < points_.size() - 1; ++i) {
+    sum += (std::get<0>(points_[i + 1]) - std::get<0>(points_[i])) *
+           (std::get<1>(points_[i + 1]) + std::get<1>(points_[i]));
   }
-  return allRightHanded  ? Handedness::RIGHT
-         : allLeftHanded ? Handedness::LEFT
-                         : Handedness::NEITHER;
+  return sum < 0 ? Handedness::RIGHT : Handedness::LEFT;
 }
 
 std::vector<std::optional<BoundedLine>> Polygon::getLines() const {
