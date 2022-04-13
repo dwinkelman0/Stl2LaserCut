@@ -195,6 +195,16 @@ void Face::generateBaselineEdges(const LaserCutRenderer &renderer) {
   }
   std::cout << std::endl;
   Polygon projection(shared_from_this());
+  std::vector<std::shared_ptr<Line>> offsetLines;
+  for (uint32_t i = 0; i < projection.getLines().size(); ++i) {
+    offsetLines.push_back(std::make_shared<Line>(
+        projection.getLines()[i].getOffsetLine(-baselineOffsets[i])));
+  }
+  for (auto it = offsetLines.begin(); it < offsetLines.end(); ++it) {
+    std::vector<std::shared_ptr<Line>> otherLines(offsetLines.begin(), it);
+    otherLines.insert(otherLines.end(), std::min(it + 1, offsetLines.end()),
+                      offsetLines.end());
+  }
 }
 
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
@@ -225,6 +235,23 @@ bool Line::getPossibleEquality(const Line &other) const {
 Line Line::getPerpendicularLine(const Vec2 &point) const {
   return Line(b_, -a_, b_ * std::get<0>(point) - a_ * std::get<1>(point),
               direction_);
+}
+
+bool Line::comparePoints(const Vec2 &a, const Vec2 &b) const {
+  std::optional<Vec2> aIntersect = getIntersection(getPerpendicularLine(a));
+  std::optional<Vec2> bIntersect = getIntersection(getPerpendicularLine(b));
+  assert(aIntersect && bIntersect);
+  if (direction_) {
+    // Line oriented towards the left (or up)
+    return std::get<0>(*aIntersect) == std::get<0>(*bIntersect)
+               ? std::get<1>(*aIntersect) < std::get<1>(*bIntersect)
+               : std::get<0>(*aIntersect) > std::get<0>(*bIntersect);
+  } else {
+    // Line oriented towards the right (or down)
+    return std::get<0>(*aIntersect) == std::get<0>(*bIntersect)
+               ? std::get<1>(*aIntersect) > std::get<1>(*bIntersect)
+               : std::get<0>(*aIntersect) < std::get<0>(*bIntersect);
+  }
 }
 
 std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {
@@ -297,7 +324,8 @@ std::optional<Vec2> BoundedLine::getBoundedIntersection(
 }
 
 std::ostream &operator<<(std::ostream &os, const Line &line) {
-  os << line.a_ << "x + " << line.b_ << "y = " << line.c_;
+  os << line.a_ << "x + " << line.b_ << "y = " << line.c_ << " ("
+     << (line.direction_ ? "left" : "right") << ")";
   return os;
 }
 
@@ -384,13 +412,26 @@ std::pair<Polygon, Polygon::OffsetStatus> Polygon::createPolygonWithOffset(
   }
 }
 
-std::ostream &operator<<(std::ostream &os, const Polygon &polygon) {
-  os << "{ ";
-  for (const Vec2 &point : polygon.getPoints()) {
-    os << point << ", ";
+Polygon::Handedness Polygon::getHandedness() const {
+  bool allRightHanded = true;
+  bool allLeftHanded = true;
+  std::vector<BoundedLine> lines = getLines();
+  for (uint32_t i = 0;
+       i < lines.size() - 1 && (allRightHanded || allLeftHanded); ++i) {
+    Line offsetLine = lines[i].getOffsetLine(-1);
+    std::optional<Vec2> offsetIntersect =
+        offsetLine.getIntersection(lines[i + 1]);
+    if (offsetIntersect) {
+      if (lines[i + 1].comparePoints(points_[i + 1], *offsetIntersect)) {
+        allLeftHanded = false;
+      } else {
+        allRightHanded = false;
+      }
+    }
   }
-  os << "}";
-  return os;
+  return allRightHanded  ? Handedness::RIGHT
+         : allLeftHanded ? Handedness::LEFT
+                         : Handedness::NEITHER;
 }
 
 std::vector<BoundedLine> Polygon::getLines() const {
@@ -400,6 +441,15 @@ std::vector<BoundedLine> Polygon::getLines() const {
   }
   lines.push_back(BoundedLine(points_.back(), points_.front()));
   return lines;
+}
+
+std::ostream &operator<<(std::ostream &os, const Polygon &polygon) {
+  os << "{ ";
+  for (const Vec2 &point : polygon.getPoints()) {
+    os << point << ", ";
+  }
+  os << "}";
+  return os;
 }
 
 std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {

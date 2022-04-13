@@ -99,6 +99,50 @@ TEST(Geometry, LineOffset) {
   ASSERT_TRUE(l5.getOffsetLine(1).getPossibleEquality(c5));
 }
 
+TEST(Geometry, LinePointComparison) {
+  // Basic example (oriented towards left)
+  BoundedLine l0({2, 0}, {0, 2});
+  ASSERT_FALSE(l0.comparePoints({1, 1}, {2, 0}));
+  ASSERT_FALSE(l0.comparePoints({1, 1}, {1, 1}));
+  ASSERT_TRUE(l0.comparePoints({1, 1}, {0, 2}));
+  ASSERT_FALSE(l0.comparePoints({0, 0}, {2, 2}));
+  ASSERT_FALSE(l0.comparePoints({2, 2}, {0, 0}));
+  ASSERT_TRUE(l0.comparePoints({2, 2}, {0, 2}));
+
+  // Basic example (oriented towards right)
+  BoundedLine l1({0, 2}, {2, 0});
+  ASSERT_TRUE(l1.comparePoints({1, 1}, {2, 0}));
+  ASSERT_FALSE(l1.comparePoints({1, 1}, {1, 1}));
+  ASSERT_FALSE(l1.comparePoints({1, 1}, {0, 2}));
+  ASSERT_FALSE(l1.comparePoints({0, 0}, {2, 2}));
+  ASSERT_FALSE(l1.comparePoints({2, 2}, {0, 0}));
+  ASSERT_FALSE(l1.comparePoints({2, 2}, {0, 2}));
+
+  // Horizontal line (oriented towards left)
+  BoundedLine l2({2, 0}, {0, 0});
+  ASSERT_TRUE(l2.comparePoints({4, 0}, {3, 0}));
+  ASSERT_FALSE(l2.comparePoints({3, 0}, {3, 0}));
+  ASSERT_FALSE(l2.comparePoints({2, 0}, {3, 0}));
+
+  // Horizontal line (oriented towards right)
+  BoundedLine l3({0, 0}, {2, 0});
+  ASSERT_FALSE(l3.comparePoints({4, 0}, {3, 0}));
+  ASSERT_FALSE(l3.comparePoints({3, 0}, {3, 0}));
+  ASSERT_TRUE(l3.comparePoints({2, 0}, {3, 0}));
+
+  // Vertical line (oriented down)
+  BoundedLine l4({0, 0}, {0, -3});
+  ASSERT_TRUE(l4.comparePoints({0, 4}, {0, 3}));
+  ASSERT_FALSE(l4.comparePoints({0, 3}, {0, 3}));
+  ASSERT_FALSE(l4.comparePoints({0, 2}, {0, 3}));
+
+  // Vertical line (oriented up)
+  BoundedLine l5({0, -3}, {0, 0});
+  ASSERT_FALSE(l5.comparePoints({0, 4}, {0, 3}));
+  ASSERT_FALSE(l5.comparePoints({0, 3}, {0, 3}));
+  ASSERT_TRUE(l5.comparePoints({0, 2}, {0, 3}));
+}
+
 TEST(Geometry, BoundedLine) {
   BoundedLine l0({2, 0}, {0, 2});
   Line c0(1, 1, 2, true);
@@ -210,4 +254,30 @@ TEST(Geometry, PolygonOffset) {
   Polygon p2(points2);
   auto [smaller2, s20] = p2.createPolygonWithOffset(-1);
   ASSERT_EQ(s20, Polygon::OffsetStatus::SELF_INTERSECTING);
+}
+
+TEST(Geometry, PolygonHandedness) {
+  // Basic right-handed triangle
+  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
+  Polygon p0(points0);
+  Polygon::Handedness h0 = p0.getHandedness();
+  ASSERT_EQ(h0, Polygon::Handedness::RIGHT);
+
+  // Basic left-handed triangle
+  std::vector<Vec2> points1 = {{0, 0}, {0, 1}, {1, 0}};
+  Polygon p1(points1);
+  Polygon::Handedness h1 = p1.getHandedness();
+  ASSERT_EQ(h1, Polygon::Handedness::LEFT);
+
+  // Right-handed quadrilateral with co-linear points
+  std::vector<Vec2> points2 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
+  Polygon p2(points2);
+  Polygon::Handedness h2 = p2.getHandedness();
+  ASSERT_EQ(h2, Polygon::Handedness::RIGHT);
+
+  // Basic self-intersecting quadrilateral
+  std::vector<Vec2> points3 = {{0, 0}, {1, 1}, {0, 1}, {1, 0}};
+  Polygon p3(points3);
+  Polygon::Handedness h3 = p3.getHandedness();
+  ASSERT_EQ(h3, Polygon::Handedness::NEITHER);
 }

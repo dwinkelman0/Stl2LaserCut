@@ -136,6 +136,8 @@ class Line {
   Line getOffsetLine(const float offset) const;
   bool getPossibleEquality(const Line &other) const;
   Line getPerpendicularLine(const Vec2 &point) const;
+  bool comparePoints(const Vec2 &a, const Vec2 &b) const;
+  bool getAlignmentWith(const Line &other) const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);
 
@@ -162,18 +164,19 @@ class Polygon {
   Polygon(const FacePtr &face);
 
   enum class OffsetStatus { SUCCESS, NEGATIVE_AREA, SELF_INTERSECTING };
+  enum class Handedness { RIGHT, LEFT, NEITHER };
 
   inline std::vector<Vec2> getPoints() const { return points_; }
   bool isSelfIntersecting() const;
   float getArea() const;
   std::pair<Polygon, OffsetStatus> createPolygonWithOffset(
       const float offset) const;
+  Handedness getHandedness() const;
+  std::vector<BoundedLine> getLines() const;
 
   friend std::ostream &operator<<(std::ostream &os, const Polygon &polygon);
 
  private:
-  std::vector<BoundedLine> getLines() const;
-
   std::vector<Vec2> points_;
 };
 
