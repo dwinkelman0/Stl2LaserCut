@@ -1,6 +1,7 @@
 // Copyright 2022 by Daniel Winkelman. All rights reserved.
 
 #include <Geometry.h>
+#include <Utils.h>
 #include <gtest/gtest.h>
 
 TEST(Geometry, FaceIsPlanar) {
@@ -45,71 +46,68 @@ TEST(Geometry, FaceArea) {
 
 TEST(Geometry, LineIntersection) {
   // Easy line
-  Line l0(1, 1, 1, true);
-  Line l1(1, -1, 0, true);
+  Line l0(1, 1, 1);
+  Line l1(1, -1, 0);
   auto i0 = l0.getIntersection(l1);
   ASSERT_TRUE(i0);
   ASSERT_FLOAT_EQ(std::get<0>(*i0), 0.5);
   ASSERT_FLOAT_EQ(std::get<1>(*i0), 0.5);
 
   // Trickier line
-  Line l2(5, 3, 6, true);
-  Line l3(8, -5, 9.6, true);
+  Line l2(5, 3, 6);
+  Line l3(8, -5, 9.6);
   auto i1 = l2.getIntersection(l3);
   ASSERT_TRUE(i1);
   ASSERT_FLOAT_EQ(std::get<0>(*i1), 1.2);
   ASSERT_FLOAT_EQ(std::get<1>(*i1), 0);
 
   // Infinitely many solutions
-  Line l4(4, 2, 8, true);
-  Line l5(12, 6, 24, true);
+  Line l4(4, 2, 8);
+  Line l5(12, 6, 24);
   auto i2 = l4.getIntersection(l5);
   ASSERT_FALSE(i2);
 
   // No solutions
-  Line l6(4, 2, 10, true);
-  Line l7(12, 6, 24, true);
+  Line l6(4, 2, 10);
+  Line l7(12, 6, 24);
   auto i3 = l6.getIntersection(l7);
   ASSERT_FALSE(i3);
 }
 
 TEST(Geometry, LineOffset) {
   // Easy line
-  Line l0(1, 1, 0, true);
-  Line c0(1, 1, std::sqrt(2), true);
+  Line l0(1, 1, 0);
+  Line c0(1, 1, std::sqrt(2));
   ASSERT_TRUE(l0.getOffsetLine(1).getPossibleEquality(c0));
-  Line l1(1, 1, 0, false);
-  Line c1(1, 1, -std::sqrt(2), false);
+  Line l1(-1, -1, 0);
+  Line c1(-1, -1, -std::sqrt(2));
   ASSERT_TRUE(l1.getOffsetLine(1).getPossibleEquality(c1));
 
   // Vertical Line
-  Line l2(1, 0, 0, true);
-  Line c2(1, 0, 1, true);
+  Line l2(1, 0, 0);
+  Line c2(1, 0, 1);
   ASSERT_TRUE(l2.getOffsetLine(1).getPossibleEquality(c2));
-  Line l3(1, 0, 0, false);
-  Line c3(1, 0, -1, false);
+  Line l3(-1, 0, 0);
+  Line c3(-1, 0, -1);
   ASSERT_TRUE(l3.getOffsetLine(1).getPossibleEquality(c3));
 
   // Horizontal Line
-  Line l4(0, 1, 0, true);
-  Line c4(0, 1, 1, true);
+  Line l4(0, 1, 0);
+  Line c4(0, 1, 1);
   ASSERT_TRUE(l4.getOffsetLine(1).getPossibleEquality(c4));
-  Line l5(0, 1, 0, false);
-  Line c5(0, 1, -1, false);
+  Line l5(0, -1, 0);
+  Line c5(0, -1, -1);
   ASSERT_TRUE(l5.getOffsetLine(1).getPossibleEquality(c5));
 
   // Different signs
-  Line l6(-1, -1, 1, true);
-  Line c6(-1, -1, 1 - std::sqrt(2), true);
-  std::cout << l6.getOffsetLine(1) << ", " << c6 << std::endl;
+  Line l6(-1, -1, 1);
+  Line c6(-1, -1, 1 - std::sqrt(2));
   ASSERT_TRUE(l6.getOffsetLine(1).getPossibleEquality(c6));
-  Line l7(-1, 1, 1, true);
-  Line c7(-1, 1, 2, true);
-  std::cout << l7.getOffsetLine(std::sqrt(2) / 2) << ", " << c7 << std::endl;
+  Line l7(-1, 1, 1);
+  Line c7(-1, 1, 2);
   ASSERT_TRUE(l7.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c7));
-  Line l8(1, -1, 1, true);
-  Line c8(1, -1, 0, true);
-  std::cout << l8.getOffsetLine(std::sqrt(2) / 2) << ", " << c8 << std::endl;
+  Line l8(1, -1, 1);
+  Line c8(1, -1, 0);
   ASSERT_TRUE(l8.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c8));
 }
 
@@ -159,31 +157,31 @@ TEST(Geometry, LinePointComparison) {
 
 TEST(Geometry, BoundedLine) {
   BoundedLine l0({2, 0}, {0, 2});
-  Line c0(1, 1, 2, true);
+  Line c0(-1, -1, -2);
   ASSERT_TRUE(c0.getPossibleEquality(l0));
 
   BoundedLine l1({0, 2}, {2, 0});
-  Line c1(1, 1, 2, false);
+  Line c1(1, 1, 2);
   ASSERT_TRUE(c1.getPossibleEquality(l1));
 
   BoundedLine l2({-2, -1}, {2, 1});
-  Line c2(1, -2, 0, false);
+  Line c2(-1, 2, 0);
   ASSERT_TRUE(c2.getPossibleEquality(l2));
 
   BoundedLine l3({5, 0}, {5, 6});
-  Line c3(1, 0, 5, true);
+  Line c3(-1, 0, -5);
   ASSERT_TRUE(c3.getPossibleEquality(l3));
 
   BoundedLine l4({0, 5}, {6, 5});
-  Line c4(0, 1, 5, false);
+  Line c4(0, 1, 5);
   ASSERT_TRUE(c4.getPossibleEquality(l4));
 
   BoundedLine l5({0, 0}, {1, 0});
-  Line c5(0, 1, 0, false);
+  Line c5(0, 1, 0);
   ASSERT_TRUE(c5.getPossibleEquality(l5));
 
   BoundedLine l6({0, 1}, {0, 0});
-  Line c6(1, 0, 0, false);
+  Line c6(1, 0, 0);
   ASSERT_TRUE(c6.getPossibleEquality(l6));
 }
 
@@ -270,4 +268,66 @@ TEST(Geometry, PolygonHandedness) {
   Polygon p4(points4);
   Polygon::Handedness h4 = p4.getHandedness();
   ASSERT_EQ(h4, Polygon::Handedness::RIGHT);
+}
+
+std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
+getNonIntersectingPolygons(const std::vector<std::shared_ptr<Line>> &mainLines,
+                           const std::vector<Vec2> &intersections);
+
+static std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
+splitPolygon(const Polygon &polygon) {
+  std::vector<std::shared_ptr<Line>> lines;
+  for (const auto &line : polygon.getLines()) {
+    lines.push_back(std::make_shared<Line>(*line));
+  }
+  return getNonIntersectingPolygons(lines, polygon.getPoints());
+}
+
+TEST(Geometry, GetNonIntersectingPolygons) {
+  // Basic triangle
+  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
+  auto p0 = splitPolygon(Polygon(points0));
+  ASSERT_EQ(p0.size(), 1);
+  ASSERT_EQ(p0[0].size(), 3);
+
+  // Basic quadrilateral
+  std::vector<Vec2> points1 = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+  auto p1 = splitPolygon(Polygon(points1));
+  ASSERT_EQ(p1.size(), 1);
+  ASSERT_EQ(p1[0].size(), 4);
+
+  // Basic self-intersecting quadrilateral
+  std::vector<Vec2> points2 = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+  auto p2 = splitPolygon(Polygon(points2));
+  ASSERT_EQ(p2.size(), 2);
+  ASSERT_EQ(p2[0].size(), 3);
+  ASSERT_EQ(p2[1].size(), 3);
+
+  // Polygon with two self-intersections on same line
+  std::vector<Vec2> points3 = {{0, 0}, {4, 0}, {4, 2}, {2, -1}, {0, 2}};
+  auto p3 = splitPolygon(Polygon(points3));
+  ASSERT_EQ(p3.size(), 3);
+  ASSERT_EQ(p3[0].size(), 3);
+  ASSERT_EQ(p3[1].size(), 3);
+  ASSERT_EQ(p3[2].size(), 3);
+
+  // Polygon with self-intersection on a line
+  std::vector<Vec2> points4 = {{0, 0}, {4, 0}, {4, 2}, {2, 0}, {0, 2}};
+  auto p4 = splitPolygon(Polygon(points4));
+  ASSERT_EQ(p4.size(), 2);
+  ASSERT_EQ(p4[0].size(), 3);
+  ASSERT_EQ(p4[1].size(), 3);
+
+  // Polygon with self-intersection at a vertex
+  std::vector<Vec2> points5 = {{0, 0}, {1, 3}, {4, 4}, {4, 0}, {1, 3}, {0, 4}};
+  auto p5 = splitPolygon(Polygon(points5));
+  ASSERT_EQ(p5.size(), 2);
+  ASSERT_EQ(p5[0].size(), 3);
+  ASSERT_EQ(p5[1].size(), 3);
+
+  // Polygon with colinear points
+  std::vector<Vec2> points6 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
+  auto p6 = splitPolygon(Polygon(points6));
+  ASSERT_EQ(p6.size(), 1);
+  ASSERT_EQ(p6[0].size(), 4);
 }

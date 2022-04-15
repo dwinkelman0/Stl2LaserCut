@@ -1,6 +1,7 @@
 // Copyright 2022 by Daniel Winkelman. All rights reserved.
 
 #include <Stl.h>
+#include <Utils.h>
 
 struct VertexPtrComparator {
   bool operator()(const VertexPtr &a, const VertexPtr &b) const {
@@ -122,45 +123,12 @@ std::vector<FacePtr> facesFromTrianglePartition(
     remainingTriangles = newRemainingTriangles;
   }
 
-  // Try to find the smallest closed shape within a chain
-  std::function smallestClosedShapeFunc =
-      [](const std::vector<VertexPtr> &chain) {
-        assert(chain.size() >= 3);
-        uint32_t chainSize = chain.size();
-        uint32_t begin = 0, end = chainSize;
-        for (uint32_t i = 0; i < chainSize; ++i) {
-          for (uint32_t j = i + 1; j < i + 1 + chainSize; ++j) {
-            if (chain[i] == chain[j % chainSize]) {
-              if (j - i < end - begin) {
-                begin = i;
-                end = j;
-              }
-              break;
-            }
-          }
-        }
-        end %= chainSize;
-        auto beginIt = chain.begin() + begin;
-        auto endIt = chain.begin() + end % chainSize;
-        if (begin < end) {
-          std::vector<VertexPtr> subchain(beginIt, endIt);
-          std::vector<VertexPtr> remainder(chain.begin(), beginIt);
-          remainder.insert(remainder.end(), endIt, chain.end());
-          return std::pair<std::vector<VertexPtr>, std::vector<VertexPtr>>(
-              subchain, remainder);
-        } else {
-          std::vector<VertexPtr> subchain(chain.begin(), endIt);
-          subchain.insert(subchain.end(), beginIt, chain.end());
-          std::vector<VertexPtr> remainder(endIt, beginIt);
-          return std::pair<std::vector<VertexPtr>, std::vector<VertexPtr>>(
-              subchain, remainder);
-        }
-      };
-
   std::vector<FacePtr> output;
   std::vector<VertexPtr> remainder(chain.begin(), chain.end() - 1);
   while (remainder.size() > 1) {
-    const auto [subchain, newRemainder] = smallestClosedShapeFunc(remainder);
+    const auto [subchain, newRemainder] = getSmallestClosedShape<VertexPtr>(
+        remainder,
+        [](const VertexPtr &a, const VertexPtr &b) { return a == b; });
     if (subchain.size() >= 3) {
       output.push_back(Face::create(subchain, normal));
       if (!output.back()) {

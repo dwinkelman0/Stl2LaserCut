@@ -33,6 +33,7 @@ float cross(const Vec2 vec1, const Vec2 vec2);
 Vec3 cross(const Vec3 vec1, const Vec3 vec2);
 float abs(const Vec2 vec);
 float abs(const Vec3 vec);
+float angle(const Vec2 vec1, const Vec2 vec2);
 float angle(const Vec3 vec1, const Vec3 vec2);
 Vec3 rotateX(const Vec3 vec, const float angle);
 Vec3 rotateY(const Vec3 vec, const float angle);
@@ -129,8 +130,14 @@ class Face : public std::enable_shared_from_this<Face> {
 
 class Line {
  public:
-  Line(const float a, const float b, const float c, const float direction)
-      : a_(a), b_(b), c_(c), direction_(direction) {}
+  Line(const float a, const float b, const float c) : a_(a), b_(b), c_(c) {
+    float magnitude = std::sqrt(a_ * a_ + b_ * b_);
+    a_ /= magnitude;
+    b_ /= magnitude;
+    c_ /= magnitude;
+  }
+
+  Line operator-() const { return Line(-a_, -b_, -c_); }
 
   std::optional<Vec2> getIntersection(const Line &other) const;
   Line getOffsetLine(const float offset) const;
@@ -138,12 +145,13 @@ class Line {
   Line getPerpendicularLine(const Vec2 &point) const;
   bool comparePoints(const Vec2 &a, const Vec2 &b) const;
   Line normalize() const;
+  Line getMidline(const Line &other, const Vec2 &point) const;
+  float getAngle(const Line &other) const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);
 
  protected:
   float a_, b_, c_;
-  bool direction_;
 };
 
 class BoundedLine : public Line {

@@ -3,6 +3,7 @@
 #include "Geometry.h"
 
 #include <LaserCut.h>
+#include <Utils.h>
 
 #include <numbers>
 
@@ -63,6 +64,11 @@ float abs(const Vec3 vec) {
   return std::sqrt(std::get<0>(vec) * std::get<0>(vec) +
                    std::get<1>(vec) * std::get<1>(vec) +
                    std::get<2>(vec) * std::get<2>(vec));
+}
+
+float angle(const Vec2 vec1, const Vec2 vec2) {
+  float mag = abs(vec1) * abs(vec2);
+  return mag > 0 ? std::acos(dot(vec1, vec2) / mag) : 0;
 }
 
 float angle(const Vec3 vec1, const Vec3 vec2) {
@@ -182,6 +188,79 @@ std::vector<EdgePtr> Face::getEdges() const {
   return output;
 }
 
+class LinePointComparator {
+ public:
+  LinePointComparator(const Line &line) : line_(line) {}
+  bool operator()(const Vec2 &a, const Vec2 &b) const {
+    return line_.comparePoints(a, b);
+  }
+
+ private:
+  Line line_;
+};
+
+std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
+getNonIntersectingPolygons(const std::vector<std::shared_ptr<Line>> &mainLines,
+                           const std::vector<Vec2> &intersections) {
+  std::vector<std::tuple<std::shared_ptr<Line>, Vec2, Vec2,
+                         std::set<Vec2, LinePointComparator>>>
+      orderedIntersections;
+  for (int32_t i = 0; i < mainLines.size(); ++i) {
+    auto &[line, lowIntersection, highIntersection, intersectionSet] =
+        orderedIntersections.emplace_back(mainLines[i], intersections[i],
+                                          moduloIndex(intersections, i + 1),
+                                          LinePointComparator(*mainLines[i]));
+    intersectionSet.insert(lowIntersection);
+    intersectionSet.insert(highIntersection);
+  }
+  for (uint32_t i = 0; i < orderedIntersections.size(); ++i) {
+    for (uint32_t j = i + 2; j < std::min(orderedIntersections.size(),
+                                          orderedIntersections.size() - 1 + i);
+         ++j) {
+      auto &[lineA, lowIntersectionA, highIntersectionA, intersectionSetA] =
+          orderedIntersections[i];
+      auto &[lineB, lowIntersectionB, highIntersectionB, intersectionSetB] =
+          orderedIntersections[j];
+      BoundedLine boundedLineA(lowIntersectionA, highIntersectionA);
+      BoundedLine boundedLineB(lowIntersectionB, highIntersectionB);
+      std::optional<Vec2> intersection =
+          boundedLineA.getBoundedIntersection(boundedLineB);
+      if (intersection) {
+        intersectionSetA.insert(*intersection);
+        intersectionSetB.insert(*intersection);
+      }
+    }
+  }
+  std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>> output;
+  std::vector<std::pair<Vec2, std::shared_ptr<Line>>> chain;
+  for (const auto &[line, lowIntersection, highIntersection, intersectionSet] :
+       orderedIntersections) {
+    if (intersectionSet.key_comp()(lowIntersection, highIntersection)) {
+      auto begin = intersectionSet.find(lowIntersection);
+      auto end = intersectionSet.find(highIntersection);
+      for (auto it = begin; it != end; ++it) {
+        chain.emplace_back(*it, line);
+      }
+    }
+  }
+  while (!chain.empty()) {
+    if (chain.size() < 3) {
+      return output;
+    }
+    const auto [subchain, remainder] =
+        getSmallestClosedShape<std::pair<Vec2, std::shared_ptr<Line>>>(
+            chain, [](const std::pair<Vec2, std::shared_ptr<Line>> &a,
+                      const std::pair<Vec2, std::shared_ptr<Line>> &b) {
+              return a.first == b.first;
+            });
+    if (subchain.size() >= 3) {
+      output.push_back(subchain);
+    }
+    chain = remainder;
+  }
+  return output;
+}
+
 void Face::generateBaselineEdges(const LaserCutRenderer &renderer) {
   baselineEdges_.clear();
   std::vector<float> angles;
@@ -195,23 +274,48 @@ void Face::generateBaselineEdges(const LaserCutRenderer &renderer) {
   }
   std::cout << std::endl;
   Polygon projection(shared_from_this());
-  std::vector<std::shared_ptr<Line>> offsetLines;
+  std::vector<std::shared_ptr<Line>> partialOffsetLines;
   for (uint32_t i = 0; i < projection.getLines().size(); ++i) {
-    offsetLines.push_back(
+    partialOffsetLines.push_back(
         projection.getLines()[i]
             ? std::make_shared<Line>(
                   projection.getLines()[i]->getOffsetLine(-baselineOffsets[i]))
-            : std::shared_ptr<Line>(nullptr));
+            : nullptr);
   }
-  for (auto it = offsetLines.begin(); it < offsetLines.end(); ++it) {
-    std::vector<std::shared_ptr<Line>> otherLines(offsetLines.begin(), it);
-    otherLines.insert(otherLines.end(), std::min(it + 1, offsetLines.end()),
-                      offsetLines.end());
+  std::vector<std::shared_ptr<Line>> offsetLines, spacedOffsetLines;
+  std::vector<Vec2> intersections;
+  for (uint32_t i = 0; i < partialOffsetLines.size(); ++i) {
+    Vec2 midpoint = moduloIndex(projection.getPoints(), i + 1);
+    Line midline = partialOffsetLines[i]->getMidline(
+        -*moduloIndex(partialOffsetLines, i + 1), midpoint);
+    offsetLines.push_back(partialOffsetLines[i]);
+    spacedOffsetLines.push_back(partialOffsetLines[i]);
+    if (baselineOffsets[i] != moduloIndex(baselineOffsets, i + 1) &&
+        abs(partialOffsetLines[i]->getAngle(
+            *moduloIndex(partialOffsetLines, i + 1))) < std::numbers::pi / 4) {
+      offsetLines.push_back(std::make_shared<BoundedLine>(
+          *partialOffsetLines[i]->getIntersection(midline),
+          *moduloIndex(partialOffsetLines, i + 1)->getIntersection(midline)));
+      spacedOffsetLines.push_back(offsetLines.back());
+      intersections.push_back(*partialOffsetLines[i]->getIntersection(midline));
+      intersections.push_back(
+          *moduloIndex(partialOffsetLines, i + 1)->getIntersection(midline));
+    } else {
+      spacedOffsetLines.push_back(nullptr);
+      intersections.push_back(*partialOffsetLines[i]->getIntersection(midline));
+    }
   }
+  intersections.insert(intersections.begin(), intersections.back());
+  intersections.pop_back();
+  std::cout << offsetLines.size() << " offset lines" << std::endl;
+  auto expandedPolygons =
+      getNonIntersectingPolygons(offsetLines, intersections);
+  std::cout << expandedPolygons.size() << " expanded polygons" << std::endl;
+  std::cout << std::endl;
 }
 
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
-  if (a_ * other.b_ - b_ * other.a_ == 0) {
+  if (abs(a_ * other.b_ - b_ * other.a_) < 1e-6) {
     return std::nullopt;
   } else if (a_ != 0) {
     float ratio = other.a_ / a_;
@@ -225,9 +329,8 @@ std::optional<Vec2> Line::getIntersection(const Line &other) const {
 
 Line Line::getOffsetLine(const float offset) const {
   return Line(a_, b_,
-              c_ + offset * sqrt(a_ * a_ + b_ * b_) * (direction_ ? 1 : -1) *
-                       (b_ < 0 ? -1 : 1),
-              direction_);
+              c_ + offset * sqrt(a_ * a_ + b_ * b_) *
+                       (b_ > 0 || b_ == 0 && a_ > 0 ? 1 : -1));
 }
 
 bool Line::getPossibleEquality(const Line &other) const {
@@ -235,37 +338,36 @@ bool Line::getPossibleEquality(const Line &other) const {
   Line otherNorm = other.normalize();
   return abs(thisNorm.a_ - otherNorm.a_) < 1e-6 &&
          abs(thisNorm.b_ - otherNorm.b_) < 1e-6 &&
-         abs(thisNorm.c_ - otherNorm.c_) < 1e-6 &&
-         thisNorm.direction_ == otherNorm.direction_;
+         abs(thisNorm.c_ - otherNorm.c_) < 1e-6;
 }
 
 Line Line::getPerpendicularLine(const Vec2 &point) const {
-  return Line(b_, -a_, b_ * std::get<0>(point) - a_ * std::get<1>(point),
-              direction_);
+  return Line(b_, -a_, b_ * std::get<0>(point) - a_ * std::get<1>(point));
 }
 
 bool Line::comparePoints(const Vec2 &a, const Vec2 &b) const {
   std::optional<Vec2> aIntersect = getIntersection(getPerpendicularLine(a));
   std::optional<Vec2> bIntersect = getIntersection(getPerpendicularLine(b));
   assert(aIntersect && bIntersect);
-  if (direction_) {
-    // Line oriented towards the left (or up)
-    return std::get<0>(*aIntersect) == std::get<0>(*bIntersect)
-               ? std::get<1>(*aIntersect) < std::get<1>(*bIntersect)
-               : std::get<0>(*aIntersect) > std::get<0>(*bIntersect);
-  } else {
-    // Line oriented towards the right (or down)
-    return std::get<0>(*aIntersect) == std::get<0>(*bIntersect)
-               ? std::get<1>(*aIntersect) > std::get<1>(*bIntersect)
-               : std::get<0>(*aIntersect) < std::get<0>(*bIntersect);
-  }
+  return dot(*bIntersect - *aIntersect, {b_, -a_}) > 0;
 }
 
 Line Line::normalize() const {
   float magnitude = std::sqrt(a_ * a_ + b_ * b_);
-  float sign = (a_ == 0 ? b_ == 0 ? c_ > 0 : b_ > 0 : a_ > 0) ? 1 : -1;
-  return Line(a_ / magnitude * sign, b_ / magnitude * sign,
-              c_ / magnitude * sign, direction_);
+  return Line(a_ / magnitude, b_ / magnitude, c_ / magnitude);
+}
+
+Line Line::getMidline(const Line &other, const Vec2 &point) const {
+  Line thisNorm = normalize();
+  Line otherNorm = other.normalize();
+  float newA = thisNorm.a_ + otherNorm.a_;
+  float newB = thisNorm.b_ + otherNorm.b_;
+  return Line(newA, newB,
+              newA * std::get<0>(point) + newB * std::get<1>(point));
+}
+
+float Line::getAngle(const Line &other) const {
+  return angle({a_, b_}, {other.a_, other.b_});
 }
 
 std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {
@@ -280,41 +382,17 @@ std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {
   return os;
 }
 
-BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0, false) {
+BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0) {
   assert(b1 != b2);
-  if ((std::get<0>(b1) == std::get<0>(b2) &&
-       std::get<1>(b1) > std::get<1>(b2)) ||
-      std::get<0>(b1) < std::get<0>(b2)) {
-    direction_ = false;
-  } else {
-    direction_ = true;
-  }
   lowerBound_ = {std::min(std::get<0>(b1), std::get<0>(b2)),
                  std::min(std::get<1>(b1), std::get<1>(b2))};
   upperBound_ = {std::max(std::get<0>(b1), std::get<0>(b2)),
                  std::max(std::get<1>(b1), std::get<1>(b2))};
-  auto result =
-      Line(std::get<0>(b1), std::get<1>(b1), 1, true)
-          .getIntersection(Line(std::get<0>(b2), std::get<1>(b2), 1, true));
-  if (!result) {
-    if (std::get<0>(b1) == 0 && std::get<0>(b2) == 0) {
-      a_ = 1;
-      b_ = 0;
-    } else if (std::get<1>(b1) == 0 && std::get<1>(b2) == 0) {
-      a_ = 0;
-      b_ = 1;
-    } else {
-      a_ = std::get<1>(b2) - std::get<1>(b1);
-      b_ = std::get<0>(b1) - std::get<0>(b2);
-    }
-    c_ = 0;
-  } else {
-    a_ = std::get<0>(*result);
-    b_ = std::get<1>(*result);
-    c_ = 1;
-  }
   assert(std::get<0>(lowerBound_) <= std::get<0>(upperBound_));
   assert(std::get<1>(lowerBound_) <= std::get<1>(upperBound_));
+  b_ = std::get<0>(b2) - std::get<0>(b1);
+  a_ = std::get<1>(b1) - std::get<1>(b2);
+  c_ = a_ * std::get<0>(b1) + b_ * std::get<1>(b1);
 }
 
 std::optional<Vec2> BoundedLine::getBoundedIntersection(
@@ -339,8 +417,7 @@ std::optional<Vec2> BoundedLine::getBoundedIntersection(
 }
 
 std::ostream &operator<<(std::ostream &os, const Line &line) {
-  os << line.a_ << "x + " << line.b_ << "y = " << line.c_ << " ("
-     << (line.direction_ ? "left" : "right") << ")";
+  os << line.a_ << "x + " << line.b_ << "y = " << line.c_;
   return os;
 }
 
