@@ -125,7 +125,6 @@ class Face : public std::enable_shared_from_this<Face> {
  private:
   std::vector<VertexPtr> vertices_;
   Vec3 normal_;
-  std::vector<std::vector<BaselineEdge>> baselineEdges_;
 };
 
 class Line {
@@ -159,6 +158,7 @@ class BoundedLine : public Line {
   BoundedLine(const Vec2 b1, const Vec2 b2);
 
   std::optional<Vec2> getBoundedIntersection(const BoundedLine &other) const;
+  Vec2 getMidpoint() const;
 
   friend std::ostream &operator<<(std::ostream &os, const BoundedLine &line);
 
