@@ -4,6 +4,38 @@
 
 #include <Geometry.h>
 
+class RenderedEdge;
+class LaserCutRenderer;
+
+using RenderedEdgePtr = std::shared_ptr<RenderedEdge>;
+
+class RenderedEdge : std::enable_shared_from_this<RenderedEdge> {
+ public:
+  static RenderedEdgePtr create(const float angle,
+                                const BoundedLine &geometricEdge,
+                                const BoundedLine &baselineEdge) {
+    return std::shared_ptr<RenderedEdge>(
+        new RenderedEdge(angle, geometricEdge, baselineEdge));
+  }
+
+  BoundedLine normalize() const;
+  std::vector<BoundedLine> generateNotches(
+      const LaserCutRenderer &renderer,
+      std::vector<RenderedEdgePtr> &oppositeEdges) const;
+
+ protected:
+  RenderedEdge(const float angle, const BoundedLine &geometricEdge,
+               const BoundedLine &baselineEdge)
+      : angle_(angle),
+        geometricEdge_(geometricEdge),
+        baselineEdge_(baselineEdge) {}
+
+ private:
+  float angle_;
+  BoundedLine geometricEdge_;
+  BoundedLine baselineEdge_;
+};
+
 class LaserCutRenderer {
  public:
   struct Config {

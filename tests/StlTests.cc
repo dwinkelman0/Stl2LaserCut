@@ -35,5 +35,5 @@ TEST(Stl, FacesFromTrianglePartition) {
   std::vector<FacePtr> f4 = facesFromTrianglePartition(
       {0, 0, 1}, {{v1, v4, v3}, {v3, v4, v5}, {v1, v3, v2}, {v2, v3, v5}});
   ASSERT_EQ(f4.size(), 1);
-  ASSERT_EQ(f4.front()->getVertices().size(), 4);
+  ASSERT_EQ(f4.front()->getVertices().getSize(), 4);
 }

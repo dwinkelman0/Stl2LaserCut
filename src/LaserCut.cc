@@ -4,6 +4,30 @@
 
 #include <numbers>
 
+std::vector<BoundedLine> getOverlappingBaselineEdges(
+    const RenderedEdgePtr &edge,
+    const std::vector<RenderedEdgePtr> &oppositeEdges) {
+  return {};
+}
+
+static Vec2 projectPointToEdge(const Line &line, const Vec2 &origin,
+                               const Vec2 &point) {
+  std::optional<Vec2> intersection =
+      line.getIntersection(line.getPerpendicularLine(point));
+  assert(intersection);
+  float direction =
+      cross(*intersection - origin, point - *intersection) > 0 ? 1 : -1;
+  return {abs(*intersection - origin) * direction, abs(point - *intersection)};
+}
+
+BoundedLine RenderedEdge::normalize() const {
+  return BoundedLine(
+      projectPointToEdge(geometricEdge_, geometricEdge_.getLowerBound(),
+                         baselineEdge_.getLowerBound()),
+      projectPointToEdge(geometricEdge_, geometricEdge_.getLowerBound(),
+                         baselineEdge_.getUpperBound()));
+}
+
 LaserCutRenderer::LaserCutRenderer(const Config &config) : config_(config) {}
 
 float LaserCutRenderer::getGeometricEdgeDistance(const float angle) const {

@@ -14,7 +14,7 @@ int main() {
   std::vector<FacePtr> faces = loadFacesFromStl(inputFile);
   std::vector<EdgePtr> edges = collectEdges(faces);
   for (const FacePtr &face : faces) {
-    face->generateBaselineEdges(renderer);
+    // face->generateBaselineEdges(renderer);
   }
   return 0;
 }

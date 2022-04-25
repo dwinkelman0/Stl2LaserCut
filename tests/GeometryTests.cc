@@ -1,7 +1,6 @@
 // Copyright 2022 by Daniel Winkelman. All rights reserved.
 
 #include <Geometry.h>
-#include <Utils.h>
 #include <gtest/gtest.h>
 
 TEST(Geometry, FaceIsPlanar) {
@@ -11,20 +10,21 @@ TEST(Geometry, FaceIsPlanar) {
   VertexPtr v3 = Vertex::create({3, 4, 0});
   VertexPtr v4 = Vertex::create({0, 1, 1});
   VertexPtr v5 = Vertex::create({-1, -1, 0});
-  FacePtr f0 = Face::create({v0, v1, v2}, {0, 0, 1});
+  FacePtr f0 = Face::create(RingVector<VertexPtr>({v0, v1, v2}), {0, 0, 1});
   ASSERT_TRUE(f0);
   ASSERT_TRUE(f0->isPlanar());
-  FacePtr f1 = Face::create({v0, v1, v3, v2}, {0, 0, 1});
+  FacePtr f1 = Face::create(RingVector<VertexPtr>({v0, v1, v3, v2}), {0, 0, 1});
   ASSERT_TRUE(f1);
   ASSERT_TRUE(f1->isPlanar());
-  FacePtr f2 = Face::create({v5, v0, v1, v2}, {0, 0, 1});
+  FacePtr f2 = Face::create(RingVector<VertexPtr>({v5, v0, v1, v2}), {0, 0, 1});
   ASSERT_TRUE(f2);
   ASSERT_TRUE(f2->isPlanar());
 
   // Faces must be planar
+  ASSERT_FALSE(Face::create(RingVector<VertexPtr>({v0, v1, v2}),
+                            {0, 1 / std::sqrt(2), 1 / std::sqrt(2)}));
   ASSERT_FALSE(
-      Face::create({v0, v1, v2}, {0, 1 / std::sqrt(2), 1 / std::sqrt(2)}));
-  ASSERT_FALSE(Face::create({v0, v1, v2, v4}, {0, 0, 1}));
+      Face::create(RingVector<VertexPtr>({v0, v1, v2, v4}), {0, 0, 1}));
 }
 
 TEST(Geometry, FaceArea) {
@@ -32,16 +32,16 @@ TEST(Geometry, FaceArea) {
   VertexPtr v1 = Vertex::create({1, 0, 0});
   VertexPtr v2 = Vertex::create({0, 1, 0});
   VertexPtr v3 = Vertex::create({2, 1, 0});
-  FacePtr f0 = Face::create({v0, v1, v2}, {0, 0, 1});
-  FacePtr f1 = Face::create({v0, v3, v2}, {0, 0, 1});
-  FacePtr f2 = Face::create({v0, v1, v3, v2}, {0, 0, 1});
+  FacePtr f0 = Face::create(RingVector<VertexPtr>({v0, v1, v2}), {0, 0, 1});
+  FacePtr f1 = Face::create(RingVector<VertexPtr>({v0, v3, v2}), {0, 0, 1});
+  FacePtr f2 = Face::create(RingVector<VertexPtr>({v0, v1, v3, v2}), {0, 0, 1});
   ASSERT_FLOAT_EQ(f0->getArea(), 0.5);
   ASSERT_FLOAT_EQ(f1->getArea(), 1.0);
   ASSERT_FLOAT_EQ(f2->getArea(), 1.5);
 
   // Cannot create faces with negative area, indicates problem with handedness
   // of order of points
-  ASSERT_FALSE(Face::create({v0, v2, v3}, {0, 0, 1}));
+  ASSERT_FALSE(Face::create(RingVector<VertexPtr>({v0, v2, v3}), {0, 0, 1}));
 }
 
 TEST(Geometry, LineIntersection) {
@@ -227,11 +227,12 @@ TEST(Geometry, PolygonArea) {
   VertexPtr v1 = Vertex::create({1, 0, 0});
   VertexPtr v2 = Vertex::create({0, 1, 0});
   VertexPtr v3 = Vertex::create({0, 0, 1});
-  FacePtr f0 = Face::create({v0, v2, v1}, {0, 0, -1});
-  FacePtr f1 = Face::create({v0, v1, v3}, {0, -1, 0});
-  FacePtr f2 = Face::create({v0, v3, v2}, {-1, 0, 0});
-  FacePtr f3 = Face::create(
-      {v1, v2, v3}, {1 / std::sqrt(3), 1 / std::sqrt(3), 1 / std::sqrt(3)});
+  FacePtr f0 = Face::create(RingVector<VertexPtr>({v0, v2, v1}), {0, 0, -1});
+  FacePtr f1 = Face::create(RingVector<VertexPtr>({v0, v1, v3}), {0, -1, 0});
+  FacePtr f2 = Face::create(RingVector<VertexPtr>({v0, v3, v2}), {-1, 0, 0});
+  FacePtr f3 =
+      Face::create(RingVector<VertexPtr>({v1, v2, v3}),
+                   {1 / std::sqrt(3), 1 / std::sqrt(3), 1 / std::sqrt(3)});
   ASSERT_FLOAT_EQ(Polygon(f0).getArea(), f0->getArea());
   ASSERT_FLOAT_EQ(Polygon(f1).getArea(), f1->getArea());
   ASSERT_FLOAT_EQ(Polygon(f2).getArea(), f2->getArea());
@@ -270,64 +271,64 @@ TEST(Geometry, PolygonHandedness) {
   ASSERT_EQ(h4, Polygon::Handedness::RIGHT);
 }
 
-std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
-getNonIntersectingPolygons(const std::vector<std::shared_ptr<Line>> &mainLines,
-                           const std::vector<Vec2> &intersections);
+// std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
+// getNonIntersectingPolygons(const std::vector<std::shared_ptr<Line>>
+// &mainLines,
+//                            const std::vector<Vec2> &intersections);
 
-static std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
-splitPolygon(const Polygon &polygon) {
-  std::vector<std::shared_ptr<Line>> lines;
-  for (const auto &line : polygon.getLines()) {
-    lines.push_back(std::make_shared<Line>(*line));
-  }
-  return getNonIntersectingPolygons(lines, polygon.getPoints());
-}
+// static std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
+// splitPolygon(const Polygon &polygon) {
+//   std::vector<std::shared_ptr<Line>> lines;
+//   for (const auto &line : polygon.getLines()) {
+//     lines.push_back(std::make_shared<Line>(*line));
+//   }
+//   return getNonIntersectingPolygons(lines, polygon.getPoints());
+// }
 
-TEST(Geometry, GetNonIntersectingPolygons) {
-  // Basic triangle
-  std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
-  auto p0 = splitPolygon(Polygon(points0));
-  ASSERT_EQ(p0.size(), 1);
-  ASSERT_EQ(p0[0].size(), 3);
+// TEST(Geometry, GetNonIntersectingPolygons) {
+//   // Basic triangle
+//   std::vector<Vec2> points0 = {{0, 0}, {1, 0}, {0, 1}};
+//   auto p0 = splitPolygon(Polygon(points0));
+//   ASSERT_EQ(p0.size(), 1);
+//   ASSERT_EQ(p0[0].size(), 3);
 
-  // Basic quadrilateral
-  std::vector<Vec2> points1 = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
-  auto p1 = splitPolygon(Polygon(points1));
-  ASSERT_EQ(p1.size(), 1);
-  ASSERT_EQ(p1[0].size(), 4);
+//   // Basic quadrilateral
+//   std::vector<Vec2> points1 = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+//   auto p1 = splitPolygon(Polygon(points1));
+//   ASSERT_EQ(p1.size(), 1);
+//   ASSERT_EQ(p1[0].size(), 4);
 
-  // Basic self-intersecting quadrilateral
-  std::vector<Vec2> points2 = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
-  auto p2 = splitPolygon(Polygon(points2));
-  ASSERT_EQ(p2.size(), 2);
-  ASSERT_EQ(p2[0].size(), 3);
-  ASSERT_EQ(p2[1].size(), 3);
+//   // Basic self-intersecting quadrilateral
+//   std::vector<Vec2> points2 = {{0, 0}, {1, 0}, {0, 1}, {1, 1}};
+//   auto p2 = splitPolygon(Polygon(points2));
+//   ASSERT_EQ(p2.size(), 2);
+//   ASSERT_EQ(p2[0].size(), 3);
+//   ASSERT_EQ(p2[1].size(), 3);
 
-  // Polygon with two self-intersections on same line
-  std::vector<Vec2> points3 = {{0, 0}, {4, 0}, {4, 2}, {2, -1}, {0, 2}};
-  auto p3 = splitPolygon(Polygon(points3));
-  ASSERT_EQ(p3.size(), 3);
-  ASSERT_EQ(p3[0].size(), 3);
-  ASSERT_EQ(p3[1].size(), 3);
-  ASSERT_EQ(p3[2].size(), 3);
+//   // Polygon with two self-intersections on same line
+//   std::vector<Vec2> points3 = {{0, 0}, {4, 0}, {4, 2}, {2, -1}, {0, 2}};
+//   auto p3 = splitPolygon(Polygon(points3));
+//   ASSERT_EQ(p3.size(), 3);
+//   ASSERT_EQ(p3[0].size(), 3);
+//   ASSERT_EQ(p3[1].size(), 3);
+//   ASSERT_EQ(p3[2].size(), 3);
 
-  // Polygon with self-intersection on a line
-  std::vector<Vec2> points4 = {{0, 0}, {4, 0}, {4, 2}, {2, 0}, {0, 2}};
-  auto p4 = splitPolygon(Polygon(points4));
-  ASSERT_EQ(p4.size(), 2);
-  ASSERT_EQ(p4[0].size(), 3);
-  ASSERT_EQ(p4[1].size(), 3);
+//   // Polygon with self-intersection on a line
+//   std::vector<Vec2> points4 = {{0, 0}, {4, 0}, {4, 2}, {2, 0}, {0, 2}};
+//   auto p4 = splitPolygon(Polygon(points4));
+//   ASSERT_EQ(p4.size(), 2);
+//   ASSERT_EQ(p4[0].size(), 3);
+//   ASSERT_EQ(p4[1].size(), 3);
 
-  // Polygon with self-intersection at a vertex
-  std::vector<Vec2> points5 = {{0, 0}, {1, 3}, {4, 4}, {4, 0}, {1, 3}, {0, 4}};
-  auto p5 = splitPolygon(Polygon(points5));
-  ASSERT_EQ(p5.size(), 2);
-  ASSERT_EQ(p5[0].size(), 3);
-  ASSERT_EQ(p5[1].size(), 3);
+//   // Polygon with self-intersection at a vertex
+//   std::vector<Vec2> points5 = {{0, 0}, {1, 3}, {4, 4}, {4, 0}, {1, 3}, {0,
+//   4}}; auto p5 = splitPolygon(Polygon(points5)); ASSERT_EQ(p5.size(), 2);
+//   ASSERT_EQ(p5[0].size(), 3);
+//   ASSERT_EQ(p5[1].size(), 3);
 
-  // Polygon with colinear points
-  std::vector<Vec2> points6 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
-  auto p6 = splitPolygon(Polygon(points6));
-  ASSERT_EQ(p6.size(), 1);
-  ASSERT_EQ(p6[0].size(), 4);
-}
+//   // Polygon with colinear points
+//   std::vector<Vec2> points6 = {{0, 0}, {1, 0}, {2, 0}, {1, 1}};
+//   auto p6 = splitPolygon(Polygon(points6));
+//   ASSERT_EQ(p6.size(), 1);
+//   ASSERT_EQ(p6[0].size(), 4);
+// }

@@ -3,12 +3,16 @@
 #include "Geometry.h"
 
 #include <LaserCut.h>
-#include <Utils.h>
 
 #include <numbers>
 
 Vec3 operator-(const Vec3 vec) {
   return {-std::get<0>(vec), -std::get<1>(vec), -std::get<2>(vec)};
+}
+
+Vec2 operator+(const Vec2 vec1, const Vec2 vec2) {
+  return {std::get<0>(vec1) + std::get<0>(vec2),
+          std::get<1>(vec1) + std::get<1>(vec2)};
 }
 
 Vec2 operator-(const Vec2 vec1, const Vec2 vec2) {
@@ -140,179 +144,54 @@ bool Edge::isConvex() const {
 }
 
 void Face::link() {
-  for (uint32_t i = 0; i < vertices_.size() - 1; ++i) {
-    vertices_[i]->link(this->shared_from_this(), vertices_[i + 1]);
-  }
-  vertices_.back()->link(this->shared_from_this(), vertices_.front());
+  vertices_.foreachPair([this](const VertexPtr &a, const VertexPtr &b) {
+    a->link(shared_from_this(), b);
+  });
 }
 
 bool Face::isPlanar() const {
-  for (uint32_t i = 2; i < vertices_.size(); ++i) {
-    Vec3 basisEdge = vertices_[i - 1]->getVector() - vertices_[0]->getVector();
-    Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
-    Vec3 product = cross(basisEdge, secondEdge);
-    if (abs(product) > 0) {
-      product = product / abs(product);
-      float alignment = abs(dot(product, normal_));
-      if (abs(alignment - 1) > 1e-6) {
-        return false;
-      }
-    } else {
-      return false;
-    }
-  }
-  return true;
+  bool output = true;
+  vertices_.foreachPair(
+      [this, &output](const VertexPtr &a, const VertexPtr &b) {
+        if (a != vertices_[0] && b != vertices_[0]) {
+          Vec3 basisEdge = a->getVector() - vertices_[0]->getVector();
+          Vec3 secondEdge = b->getVector() - vertices_[0]->getVector();
+          Vec3 product = cross(basisEdge, secondEdge);
+          if (abs(product) > 0) {
+            product = product / abs(product);
+            float alignment = abs(dot(product, normal_));
+            if (abs(alignment - 1) > 1e-6) {
+              output = false;
+            }
+          } else {
+            output = false;
+          }
+        }
+      });
+  return output;
 }
 
 float Face::getArea() const {
   float output = 0;
-  for (uint32_t i = 2; i < vertices_.size(); ++i) {
-    Vec3 basisEdge = vertices_[i - 1]->getVector() - vertices_[0]->getVector();
-    Vec3 secondEdge = vertices_[i]->getVector() - vertices_[0]->getVector();
-    Vec3 product = cross(basisEdge, secondEdge);
-    if (dot(product, normal_) > 0) {
-      output += abs(product) / 2;
-    } else {
-      output -= abs(product) / 2;
-    }
-  }
+  vertices_.foreachPair(
+      [this, &output](const VertexPtr &a, const VertexPtr &b) {
+        if (a != vertices_[0] && b != vertices_[0]) {
+          Vec3 basisEdge = a->getVector() - vertices_[0]->getVector();
+          Vec3 secondEdge = b->getVector() - vertices_[0]->getVector();
+          Vec3 product = cross(basisEdge, secondEdge);
+          if (dot(product, normal_) > 0) {
+            output += abs(product) / 2;
+          } else {
+            output -= abs(product) / 2;
+          }
+        }
+      });
   return output;
 }
 
-std::vector<EdgePtr> Face::getEdges() const {
-  std::vector<EdgePtr> output;
-  for (uint32_t i = 0; i < vertices_.size() - 1; ++i) {
-    output.push_back(vertices_[i]->getEdge(vertices_[i + 1]));
-  }
-  output.push_back(vertices_.back()->getEdge(vertices_.front()));
-  return output;
-}
-
-class LinePointComparator {
- public:
-  LinePointComparator(const Line &line) : line_(line) {}
-  bool operator()(const Vec2 &a, const Vec2 &b) const {
-    return line_.comparePoints(a, b);
-  }
-
- private:
-  Line line_;
-};
-
-std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>>
-getNonIntersectingPolygons(const std::vector<std::shared_ptr<Line>> &mainLines,
-                           const std::vector<Vec2> &intersections) {
-  std::vector<std::tuple<std::shared_ptr<Line>, Vec2, Vec2,
-                         std::set<Vec2, LinePointComparator>>>
-      orderedIntersections;
-  for (int32_t i = 0; i < mainLines.size(); ++i) {
-    auto &[line, lowIntersection, highIntersection, intersectionSet] =
-        orderedIntersections.emplace_back(mainLines[i], intersections[i],
-                                          moduloIndex(intersections, i + 1),
-                                          LinePointComparator(*mainLines[i]));
-    intersectionSet.insert(lowIntersection);
-    intersectionSet.insert(highIntersection);
-  }
-  for (uint32_t i = 0; i < orderedIntersections.size(); ++i) {
-    for (uint32_t j = i + 2; j < std::min(orderedIntersections.size(),
-                                          orderedIntersections.size() - 1 + i);
-         ++j) {
-      auto &[lineA, lowIntersectionA, highIntersectionA, intersectionSetA] =
-          orderedIntersections[i];
-      auto &[lineB, lowIntersectionB, highIntersectionB, intersectionSetB] =
-          orderedIntersections[j];
-      BoundedLine boundedLineA(lowIntersectionA, highIntersectionA);
-      BoundedLine boundedLineB(lowIntersectionB, highIntersectionB);
-      std::optional<Vec2> intersection =
-          boundedLineA.getBoundedIntersection(boundedLineB);
-      if (intersection) {
-        intersectionSetA.insert(*intersection);
-        intersectionSetB.insert(*intersection);
-      }
-    }
-  }
-  std::vector<std::vector<std::pair<Vec2, std::shared_ptr<Line>>>> output;
-  std::vector<std::pair<Vec2, std::shared_ptr<Line>>> chain;
-  for (const auto &[line, lowIntersection, highIntersection, intersectionSet] :
-       orderedIntersections) {
-    if (intersectionSet.key_comp()(lowIntersection, highIntersection)) {
-      auto begin = intersectionSet.find(lowIntersection);
-      auto end = intersectionSet.find(highIntersection);
-      for (auto it = begin; it != end; ++it) {
-        chain.emplace_back(*it, line);
-      }
-    }
-  }
-  while (!chain.empty()) {
-    if (chain.size() < 3) {
-      return output;
-    }
-    const auto [subchain, remainder] =
-        getSmallestClosedShape<std::pair<Vec2, std::shared_ptr<Line>>>(
-            chain, [](const std::pair<Vec2, std::shared_ptr<Line>> &a,
-                      const std::pair<Vec2, std::shared_ptr<Line>> &b) {
-              return a.first == b.first;
-            });
-    if (subchain.size() >= 3) {
-      output.push_back(subchain);
-    }
-    chain = remainder;
-  }
-  return output;
-}
-
-void Face::generateBaselineEdges(const LaserCutRenderer &renderer) {
-  std::vector<float> angles;
-  for (const EdgePtr &edge : getEdges()) {
-    angles.push_back(edge->getAngle());
-  }
-  std::vector<float> baselineOffsets;
-  for (const float &angle : angles) {
-    baselineOffsets.push_back(renderer.getMaterialBaseLength(angle));
-    std::cout << baselineOffsets.back() << ", ";
-  }
-  std::cout << std::endl;
-  Polygon projection(shared_from_this());
-  std::vector<std::shared_ptr<Line>> partialOffsetLines;
-  for (uint32_t i = 0; i < projection.getLines().size(); ++i) {
-    partialOffsetLines.push_back(
-        projection.getLines()[i]
-            ? std::make_shared<Line>(
-                  projection.getLines()[i]->getOffsetLine(-baselineOffsets[i]))
-            : nullptr);
-  }
-  std::vector<std::shared_ptr<Line>> offsetLines, spacedOffsetLines;
-  std::vector<Vec2> intersections;
-  for (uint32_t i = 0; i < partialOffsetLines.size(); ++i) {
-    Vec2 midpoint = moduloIndex(projection.getPoints(), i + 1);
-    Line midline = partialOffsetLines[i]->getMidline(
-        -*moduloIndex(partialOffsetLines, i + 1), midpoint);
-    offsetLines.push_back(partialOffsetLines[i]);
-    spacedOffsetLines.push_back(partialOffsetLines[i]);
-    // TODO: fix midline insertion (perpendicularness, bounded offset)
-    if (baselineOffsets[i] != moduloIndex(baselineOffsets, i + 1) &&
-        abs(partialOffsetLines[i]->getAngle(
-            *moduloIndex(partialOffsetLines, i + 1))) < std::numbers::pi / 4) {
-      offsetLines.push_back(std::make_shared<BoundedLine>(
-          *partialOffsetLines[i]->getIntersection(midline),
-          *moduloIndex(partialOffsetLines, i + 1)->getIntersection(midline)));
-      spacedOffsetLines.push_back(offsetLines.back());
-      intersections.push_back(*partialOffsetLines[i]->getIntersection(midline));
-      intersections.push_back(
-          *moduloIndex(partialOffsetLines, i + 1)->getIntersection(midline));
-    } else {
-      spacedOffsetLines.push_back(nullptr);
-      intersections.push_back(*partialOffsetLines[i]->getIntersection(midline));
-    }
-  }
-  intersections.insert(intersections.begin(), intersections.back());
-  intersections.pop_back();
-  std::cout << offsetLines.size() << " offset lines" << std::endl;
-  auto expandedPolygons =
-      getNonIntersectingPolygons(offsetLines, intersections);
-
-  std::cout << expandedPolygons.size() << " expanded polygons" << std::endl;
-  std::cout << std::endl;
+RingVector<EdgePtr> Face::getEdges() const {
+  return vertices_.foreachPair<EdgePtr>(
+      [](const VertexPtr &a, const VertexPtr &b) { return a->getEdge(b); });
 }
 
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
@@ -419,7 +298,7 @@ std::ostream &operator<<(std::ostream &os, const Line &line) {
   return os;
 }
 
-Polygon::Polygon(const FacePtr &face) {
+Polygon::Polygon(const FacePtr &face) : points_({}) {
   // Rotate about Z so that face is normal to an axis in YZ plane
   float angleZ = angle(cross(face->getNormal(), {0, 0, 1}), {1, 0, 0});
   Vec3 normal = rotateZ(face->getNormal(), angleZ);
@@ -433,21 +312,22 @@ Polygon::Polygon(const FacePtr &face) {
   angleX += orientation;
 
   // Process all points
-  for (const VertexPtr &vertex : face->getVertices()) {
-    Vec3 transformed = rotateX(rotateZ(vertex->getVector(), angleZ), angleX);
-    points_.push_back({std::get<0>(transformed), std::get<1>(transformed)});
-  }
+  points_ = face->getVertices().template foreach<Vec2>(
+      [angleX, angleZ](const VertexPtr &vertex) {
+        Vec3 transformed =
+            rotateX(rotateZ(vertex->getVector(), angleZ), angleX);
+        return Vec2(std::get<0>(transformed), std::get<1>(transformed));
+      });
+  points_.foreachPair([](const Vec2 &a, const Vec2 &b) { assert(a != b); });
 }
 
 bool Polygon::isSelfIntersecting() const {
-  std::vector<std::optional<BoundedLine>> lines = getLines();
-  for (uint32_t i = 0; i < lines.size(); ++i) {
-    for (uint32_t j = i + 2; j < std::min(lines.size(), lines.size() - 1 + i);
-         ++j) {
-      if (lines[i] && lines[j]) {
-        if (lines[i]->getBoundedIntersection(*lines[j])) {
-          return true;
-        }
+  RingVector<BoundedLine> lines = getLines();
+  for (uint32_t i = 0; i < lines.getSize(); ++i) {
+    for (uint32_t j = i + 2;
+         j < std::min(lines.getSize(), lines.getSize() - 1 + i); ++j) {
+      if (lines[i].getBoundedIntersection(lines[j])) {
+        return true;
       }
     }
   }
@@ -456,11 +336,11 @@ bool Polygon::isSelfIntersecting() const {
 
 float Polygon::getArea() const {
   float output = 0;
-  for (uint32_t i = 2; i < points_.size(); ++i) {
-    Vec2 basisEdge = points_[i - 1] - points_[0];
-    Vec2 secondEdge = points_[i] - points_[0];
+  points_.foreachPair([this, &output](const Vec2 &a, const Vec2 &b) {
+    Vec2 basisEdge = a - points_[0];
+    Vec2 secondEdge = b - points_[0];
     output += cross(basisEdge, secondEdge) / 2;
-  }
+  });
   return output;
 }
 
@@ -479,30 +359,22 @@ static Vec2 getOffsetPoint(const Line &a, const Line &b, const Vec2 point) {
 
 Polygon::Handedness Polygon::getHandedness() const {
   float sum = 0;
-  for (uint32_t i = 0; i < points_.size() - 1; ++i) {
-    sum += (std::get<0>(points_[i + 1]) - std::get<0>(points_[i])) *
-           (std::get<1>(points_[i + 1]) + std::get<1>(points_[i]));
-  }
+  points_.foreachPair([&sum](const Vec2 &a, const Vec2 &b) {
+    sum +=
+        (std::get<0>(b) - std::get<0>(a)) * (std::get<1>(b) + std::get<1>(a));
+  });
   return sum < 0 ? Handedness::RIGHT : Handedness::LEFT;
 }
 
-std::vector<std::optional<BoundedLine>> Polygon::getLines() const {
-  std::vector<std::optional<BoundedLine>> lines;
-  for (uint32_t i = 0; i < points_.size() - 1; ++i) {
-    lines.push_back(points_[i] != points_[i + 1]
-                        ? std::optional<BoundedLine>(
-                              BoundedLine(points_[i], points_[i + 1]))
-                        : std::nullopt);
-  }
-  lines.push_back(BoundedLine(points_.back(), points_.front()));
-  return lines;
+RingVector<BoundedLine> Polygon::getLines() const {
+  return points_.foreachPair<BoundedLine>(
+      [](const Vec2 &a, const Vec2 &b) { return BoundedLine(a, b); });
 }
 
 std::ostream &operator<<(std::ostream &os, const Polygon &polygon) {
   os << "{ ";
-  for (const Vec2 &point : polygon.getPoints()) {
-    os << point << ", ";
-  }
+  polygon.getPoints().foreach (
+      [&os](const Vec2 &point) { os << point << ", "; });
   os << "}";
   return os;
 }
@@ -511,7 +383,7 @@ std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
   std::vector<EdgePtr> edges;
   std::set<std::pair<VertexPtr, VertexPtr>> pairSets;
   for (const FacePtr &face : faces) {
-    for (const VertexPtr &vertex : face->vertices_) {
+    face->getVertices().foreach ([&edges, &pairSets](const VertexPtr &vertex) {
       for (const auto &[other, edge] : vertex->edges_) {
         const auto [v1, v2] = edge->getVertices();
         if (pairSets.find({v2, v1}) == pairSets.end() &&
@@ -521,7 +393,7 @@ std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces) {
           edges.push_back(edge);
         }
       }
-    }
+    });
   }
   return edges;
 }

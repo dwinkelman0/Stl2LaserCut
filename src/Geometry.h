@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <RingVector.h>
 #include <assert.h>
 
 #include <cmath>
@@ -23,6 +24,7 @@ using Vec3 = std::tuple<float, float, float>;
 class LaserCutRenderer;
 
 Vec3 operator-(const Vec3 vec);
+Vec2 operator+(const Vec2 vec1, const Vec2 vec2);
 Vec2 operator-(const Vec2 vec1, const Vec2 vec2);
 Vec3 operator-(const Vec3 vec1, const Vec3 vec2);
 Vec2 operator/(const Vec2 vec, const float x);
@@ -94,7 +96,7 @@ class Face : public std::enable_shared_from_this<Face> {
     float verticalOffset;
   };
 
-  static FacePtr create(const std::vector<VertexPtr> &vertices,
+  static FacePtr create(const RingVector<VertexPtr> &vertices,
                         const Vec3 &normal) {
     FacePtr output(new Face(vertices, normal));
     if (output->getArea() <= 0 || !output->isPlanar()) {
@@ -106,24 +108,22 @@ class Face : public std::enable_shared_from_this<Face> {
   void link();
 
   inline Vec3 getNormal() const { return normal_; }
-  inline std::vector<VertexPtr> getVertices() const { return vertices_; }
+  inline RingVector<VertexPtr> getVertices() const { return vertices_; }
   bool isPlanar() const;
   float getArea() const;
-
-  void generateBaselineEdges(const LaserCutRenderer &renderer);
 
   friend std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);
 
  protected:
-  Face(const std::vector<VertexPtr> &vertices, const Vec3 &normal)
+  Face(const RingVector<VertexPtr> &vertices, const Vec3 &normal)
       : vertices_(vertices), normal_(normal / abs(normal)) {
-    assert(vertices_.size() >= 3);
+    assert(vertices_.getSize() >= 3);
   }
 
-  std::vector<EdgePtr> getEdges() const;
+  RingVector<EdgePtr> getEdges() const;
 
  private:
-  std::vector<VertexPtr> vertices_;
+  RingVector<VertexPtr> vertices_;
   Vec3 normal_;
 };
 
@@ -159,6 +159,8 @@ class BoundedLine : public Line {
 
   std::optional<Vec2> getBoundedIntersection(const BoundedLine &other) const;
   Vec2 getMidpoint() const;
+  inline Vec2 getLowerBound() const { return lowerBound_; }
+  inline Vec2 getUpperBound() const { return upperBound_; }
 
   friend std::ostream &operator<<(std::ostream &os, const BoundedLine &line);
 
@@ -168,21 +170,21 @@ class BoundedLine : public Line {
 
 class Polygon {
  public:
-  Polygon(const std::vector<Vec2> &points) : points_(points) {}
+  Polygon(const RingVector<Vec2> &points) : points_(points) {}
   Polygon(const FacePtr &face);
 
   enum class Handedness { RIGHT, LEFT, NEITHER };
 
-  inline std::vector<Vec2> getPoints() const { return points_; }
+  inline RingVector<Vec2> getPoints() const { return points_; }
   bool isSelfIntersecting() const;
   float getArea() const;
   Handedness getHandedness() const;
-  std::vector<std::optional<BoundedLine>> getLines() const;
+  RingVector<BoundedLine> getLines() const;
 
   friend std::ostream &operator<<(std::ostream &os, const Polygon &polygon);
 
  private:
-  std::vector<Vec2> points_;
+  RingVector<Vec2> points_;
 };
 
 std::vector<EdgePtr> collectEdges(const std::vector<FacePtr> &faces);

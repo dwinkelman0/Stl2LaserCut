@@ -1,7 +1,6 @@
 // Copyright 2022 by Daniel Winkelman. All rights reserved.
 
 #include <Stl.h>
-#include <Utils.h>
 
 struct VertexPtrComparator {
   bool operator()(const VertexPtr &a, const VertexPtr &b) const {
@@ -124,19 +123,15 @@ std::vector<FacePtr> facesFromTrianglePartition(
   }
 
   std::vector<FacePtr> output;
-  std::vector<VertexPtr> remainder(chain.begin(), chain.end() - 1);
-  while (remainder.size() > 1) {
-    const auto [subchain, newRemainder] = getSmallestClosedShape<VertexPtr>(
-        remainder,
+  RingVector<VertexPtr> remainder(
+      std::vector<VertexPtr>(chain.begin(), chain.end() - 1));
+  while (remainder.getSize() > 0) {
+    const auto [subchain, newRemainder] = remainder.splitOnShortestCycle(
         [](const VertexPtr &a, const VertexPtr &b) { return a == b; });
-    if (subchain.size() >= 3) {
+    if (subchain.getSize() >= 3) {
       output.push_back(Face::create(subchain, normal));
       if (!output.back()) {
-        std::cout << "[WARNING] Failed to make face: ";
-        for (const VertexPtr &vertex : subchain) {
-          std::cout << vertex->getVector() << ", ";
-        }
-        std::cout << ";  normal: " << normal << std::endl;
+        std::cout << "[WARNING] Failed to make face";
       }
     }
     remainder = newRemainder;
