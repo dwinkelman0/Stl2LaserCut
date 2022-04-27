@@ -50,32 +50,49 @@ class RingVector {
   }
 
   template <typename T2, typename T3>
-  RingVector<T3> zip(
-      const RingVector<T2> &other,
-      const std::function<T3(const T &, const T2 &)> &callback) const {
+  RingVector<T3> zip(const RingVector<T2> &other,
+                     const std::function<T3(const T &, const T2 &)> &callback,
+                     const uint32_t offset) const {
     assert(getSize() == other.getSize());
     std::vector<T3> output;
     for (uint32_t i = 0; i < getSize(); ++i) {
-      output.push_back(callback(this->operator[](i), other[i]));
+      output.push_back(callback(this->operator[](i), other[i + offset]));
     }
     return RingVector<T3>(output);
   }
 
-  std::pair<RingVector<T>, RingVector<T>> splitOnShortestCycle(
-      const std::function<bool(const T &, const T &)> &equalityFunc) const {
-    uint32_t begin = 0;
-    uint32_t end = getSize();
+  template <typename T2>
+  void sandwich(const RingVector<T2> &other,
+                const std::function<void(const T &, const T2 &, const T &)>
+                    &callback) const {
     for (uint32_t i = 0; i < getSize(); ++i) {
-      for (uint32_t j = i + 1; j < i + getSize(); ++j) {
-        if (equalityFunc(this->operator[](i), this->operator[](j)) &&
-            j - i < end - begin) {
-          begin = i;
-          end = j;
-          assert(begin < end);
-        }
-      }
+      callback(this->operator[](i), other[i], this->operator[](i + 1));
     }
-    return {slice(begin, end), slice(end, begin + getSize())};
+  }
+
+  template <typename T2, typename T3>
+  RingVector<T3> sandwich(const RingVector<T2> &other,
+                          const std::function<T3(const T &, const T2 &,
+                                                 const T &)> &callback) const {
+    std::vector<T3> output;
+    for (uint32_t i = 0; i < getSize(); ++i) {
+      output.push_back(
+          callback(this->operator[](i), other[i], this->operator[](i + 1)));
+    }
+    return RingVector<T3>(output);
+  }
+
+  std::vector<RingVector<T>> splitCycles(
+      const std::function<bool(const T &, const T &)> &equalityFunc) const {
+    std::vector<RingVector<T>> output;
+    RingVector<T> remainder = *this;
+    while (remainder.getSize() > 0) {
+      const auto [cycle, newRemainder] =
+          remainder.splitOnShortestCycle(equalityFunc);
+      output.push_back(cycle);
+      remainder = newRemainder;
+    }
+    return output;
   }
 
   RingVector<T> slice(const uint32_t begin, const uint32_t end) const {
@@ -94,5 +111,30 @@ class RingVector {
   }
 
  private:
+  std::pair<RingVector<T>, RingVector<T>> splitOnShortestCycle(
+      const std::function<bool(const T &, const T &)> &equalityFunc) const {
+    uint32_t begin = 0;
+    uint32_t end = getSize();
+    for (uint32_t i = 0; i < getSize(); ++i) {
+      for (uint32_t j = i + 1; j < i + getSize(); ++j) {
+        if (equalityFunc(this->operator[](i), this->operator[](j)) &&
+            j - i < end - begin) {
+          begin = i;
+          end = j;
+          assert(begin < end);
+        }
+      }
+    }
+    return {slice(begin, end), slice(end, begin + getSize())};
+  }
+
   std::vector<T> vec_;
 };
+
+template <typename T1, typename T2>
+RingVector<std::pair<T1, T2>> zip(const RingVector<T1> &a,
+                                  const RingVector<T2> &b) {
+  return a.template zip<T2, std::pair<T1, T2>>(
+      b, [](const T1 &t1, const T2 &t2) { return std::pair<T1, T2>(t1, t2); },
+      0);
+}

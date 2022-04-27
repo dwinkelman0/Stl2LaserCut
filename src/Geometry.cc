@@ -149,6 +149,11 @@ void Face::link() {
   });
 }
 
+RingVector<EdgePtr> Face::getEdges() const {
+  return vertices_.foreachPair<EdgePtr>(
+      [](const VertexPtr &a, const VertexPtr &b) { return a->getEdge(b); });
+}
+
 bool Face::isPlanar() const {
   bool output = true;
   vertices_.foreachPair(
@@ -189,11 +194,6 @@ float Face::getArea() const {
   return output;
 }
 
-RingVector<EdgePtr> Face::getEdges() const {
-  return vertices_.foreachPair<EdgePtr>(
-      [](const VertexPtr &a, const VertexPtr &b) { return a->getEdge(b); });
-}
-
 std::optional<Vec2> Line::getIntersection(const Line &other) const {
   if (abs(a_ * other.b_ - b_ * other.a_) < 1e-6) {
     return std::nullopt;
@@ -210,7 +210,7 @@ std::optional<Vec2> Line::getIntersection(const Line &other) const {
 Line Line::getOffsetLine(const float offset) const {
   return Line(a_, b_,
               c_ + offset * sqrt(a_ * a_ + b_ * b_) *
-                       (b_ > 0 || b_ == 0 && a_ > 0 ? 1 : -1));
+                       ((b_ > 0 ^ a_ == 0) || b_ == 0 && a_ > 0 ? 1 : -1));
 }
 
 bool Line::getPossibleEquality(const Line &other) const {
@@ -247,7 +247,8 @@ Line Line::getMidline(const Line &other, const Vec2 &point) const {
 }
 
 float Line::getAngle(const Line &other) const {
-  return angle({a_, b_}, {other.a_, other.b_});
+  float output = angle({a_, b_}, {other.a_, other.b_});
+  return cross({a_, b_}, {other.a_, other.b_}) > 0 ? output : -output;
 }
 
 std::ostream &operator<<(std::ostream &os, const BoundedLine &line) {

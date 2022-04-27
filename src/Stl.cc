@@ -123,18 +123,15 @@ std::vector<FacePtr> facesFromTrianglePartition(
   }
 
   std::vector<FacePtr> output;
-  RingVector<VertexPtr> remainder(
-      std::vector<VertexPtr>(chain.begin(), chain.end() - 1));
-  while (remainder.getSize() > 0) {
-    const auto [subchain, newRemainder] = remainder.splitOnShortestCycle(
-        [](const VertexPtr &a, const VertexPtr &b) { return a == b; });
-    if (subchain.getSize() >= 3) {
-      output.push_back(Face::create(subchain, normal));
+  auto polygons = RingVector(chain).splitCycles(
+      [](const VertexPtr &a, const VertexPtr &b) { return a == b; });
+  for (const auto &polygon : polygons) {
+    if (polygon.getSize() >= 3) {
+      output.push_back(Face::create(polygon, normal));
       if (!output.back()) {
         std::cout << "[WARNING] Failed to make face";
       }
     }
-    remainder = newRemainder;
   }
   return output;
 }

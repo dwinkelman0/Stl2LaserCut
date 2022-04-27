@@ -93,10 +93,10 @@ TEST(Geometry, LineOffset) {
 
   // Horizontal Line
   Line l4(0, 1, 0);
-  Line c4(0, 1, 1);
+  Line c4(0, 1, -1);
   ASSERT_TRUE(l4.getOffsetLine(1).getPossibleEquality(c4));
   Line l5(0, -1, 0);
-  Line c5(0, -1, -1);
+  Line c5(0, -1, 1);
   ASSERT_TRUE(l5.getOffsetLine(1).getPossibleEquality(c5));
 
   // Different signs
@@ -109,6 +109,11 @@ TEST(Geometry, LineOffset) {
   Line l8(1, -1, 1);
   Line c8(1, -1, 0);
   ASSERT_TRUE(l8.getOffsetLine(std::sqrt(2) / 2).getPossibleEquality(c8));
+
+  // Offset sign
+  Line l9(1, -1, 1);
+  Line c9(1, -1, 2);
+  ASSERT_TRUE(l9.getOffsetLine(-std::sqrt(2) / 2).getPossibleEquality(c9));
 }
 
 TEST(Geometry, LinePointComparison) {
@@ -202,6 +207,8 @@ TEST(Geometry, BoundedLineIntersection) {
 
   ASSERT_FALSE(l1.getBoundedIntersection(l2));
   ASSERT_FALSE(l2.getBoundedIntersection(l1));
+
+  ASSERT_FALSE(l0.getBoundedIntersection(l0));
 }
 
 TEST(Geometry, PolygonSelfIntersection) {

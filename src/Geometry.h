@@ -109,6 +109,7 @@ class Face : public std::enable_shared_from_this<Face> {
 
   inline Vec3 getNormal() const { return normal_; }
   inline RingVector<VertexPtr> getVertices() const { return vertices_; }
+  RingVector<EdgePtr> getEdges() const;
   bool isPlanar() const;
   float getArea() const;
 
@@ -119,8 +120,6 @@ class Face : public std::enable_shared_from_this<Face> {
       : vertices_(vertices), normal_(normal / abs(normal)) {
     assert(vertices_.getSize() >= 3);
   }
-
-  RingVector<EdgePtr> getEdges() const;
 
  private:
   RingVector<VertexPtr> vertices_;
@@ -148,6 +147,21 @@ class Line {
   float getAngle(const Line &other) const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);
+
+  class LinePointComparator {
+   public:
+    LinePointComparator(const Line *line) : line_(line) {}
+    bool operator()(const Vec2 &a, const Vec2 &b) const {
+      return line_->comparePoints(a, b);
+    }
+
+   private:
+    const Line *line_;
+  };
+
+  LinePointComparator getPointComparator() const {
+    return LinePointComparator(this);
+  }
 
  protected:
   float a_, b_, c_;
