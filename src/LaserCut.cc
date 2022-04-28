@@ -81,8 +81,8 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
         const auto &[bEdge, bLine] = b;
         if (abs(aLine.getAngle(bLine)) < std::numbers::pi / 4) {
           assert(aLine.getUpperBound() == bLine.getLowerBound());
-          float aOffset = getGeometricEdgeDistance(aEdge->getAngle());
-          float bOffset = getGeometricEdgeDistance(bEdge->getAngle());
+          float aOffset = f1(aEdge->getAngle());
+          float bOffset = f1(bEdge->getAngle());
           if (aOffset == bOffset) {
             return std::optional<Line>();
           } else {
@@ -104,10 +104,8 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
                              const std::pair<EdgePtr, BoundedLine> &b) {
         const auto &[aEdge, aLine] = a;
         const auto &[bEdge, bLine] = b;
-        Line aOffsetLine =
-            aLine.getOffsetLine(getGeometricEdgeDistance(aEdge->getAngle()));
-        Line bOffsetLine =
-            bLine.getOffsetLine(getGeometricEdgeDistance(bEdge->getAngle()));
+        Line aOffsetLine = aLine.getOffsetLine(f1(aEdge->getAngle()));
+        Line bOffsetLine = bLine.getOffsetLine(f1(bEdge->getAngle()));
         if (perpendicularLine) {
           std::optional<Vec2> aIntersection =
               aOffsetLine.getIntersection(*perpendicularLine);
@@ -131,50 +129,83 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
     std::cout << a.first << ": " << a.second << std::endl;
   });
 
-  auto polygons = getNonIntersectingPolygons(baselineEdges);
-  for (const auto &polygon : polygons) {
-    std::cout << "Polygon (" << polygon.getSize() << "):" << std::endl;
+  // Get non-intersecting polygons
+  auto baselinePolygons = getNonIntersectingPolygons(baselineEdges);
+  if (baselinePolygons.size() == 0) {
+    std::cout << "No baseline polygons" << std::endl;
+  }
+  for (const auto &polygon : baselinePolygons) {
+    std::cout << "Polygon (" << polygon.getSize() << ", "
+              << projectedEdges.getSize() << " edges):" << std::endl;
     polygon.foreach ([](const std::pair<BoundedLine, EdgePtr> &a) {
       std::cout << " - " << a.second << ": " << a.first << std::endl;
     });
   }
 
+  // Compute tooth depth offsets
+  std::vector<std::vector<RingVector<std::pair<BoundedLine, EdgePtr>>>>
+      toothDepthPolygons;
+  for (const auto &baselinePolygon : baselinePolygons) {
+    auto toothDepthPolygon =
+        baselinePolygon.foreachPair<std::pair<Vec2, std::vector<EdgePtr>>>(
+            [this](const std::pair<BoundedLine, EdgePtr> &a,
+                   const std::pair<BoundedLine, EdgePtr> &b) {
+              const auto &[aLine, aEdge] = a;
+              const auto &[bLine, bEdge] = b;
+              Line aOffsetLine =
+                  aLine.getOffsetLine(aEdge ? f2(aEdge->getAngle()) : 0);
+              Line bOffsetLine =
+                  bLine.getOffsetLine(bEdge ? f2(bEdge->getAngle()) : 0);
+              std::cout << (aEdge ? f2(aEdge->getAngle()) : 0) << ", "
+                        << (bEdge ? f2(bEdge->getAngle()) : 0) << std::endl;
+              std::optional<Vec2> intersection =
+                  aOffsetLine.getIntersection(bOffsetLine);
+              assert(intersection);
+              return std::pair<Vec2, std::vector<EdgePtr>>(*intersection,
+                                                           {aEdge, bEdge});
+            });
+    toothDepthPolygons.push_back(getNonIntersectingPolygons(toothDepthPolygon));
+  }
+  uint32_t i = 0;
+  for (const auto &polygons : toothDepthPolygons) {
+    for (const auto &polygon : polygons) {
+      polygon.foreach ([i](const std::pair<BoundedLine, EdgePtr> &a) {
+        std::cout << " - " << i << ": " << a.second << ": " << a.first
+                  << std::endl;
+      });
+    }
+    ++i;
+  }
+
   return {};
 }
 
-float LaserCutRenderer::getGeometricEdgeDistance(const float angle) const {
-  assert(abs(angle) < std::numbers::pi);
-  float output = 0;
-  if (angle <= -std::numbers::pi / 2) {
-    output = 0;
-  } else if (angle <= 0) {
-    output = getGeometricEdgeDistance(-angle) - std::tan(-angle / 2);
-  } else if (angle <= std::numbers::pi / 2) {
-    output = std::sin(angle + std::numbers::pi / 4) / std::sqrt(2) +
-             std::tan(angle / 2) / 2;
-  } else {
-    output = 1 / std::tan((std::numbers::pi - angle) / 2);
-  }
-  return output * config_.materialThickness;
-}
-
-float LaserCutRenderer::getToothLength(const float angle) const {
-  assert(abs(angle) < std::numbers::pi);
-  float output = 0;
-  if (abs(angle) <= std::numbers::pi / 2) {
-    output = std::sin(abs(angle) + std::numbers::pi / 4) / std::sqrt(2) + 0.5;
-  } else {
-    output = (1 / std::tan((std::numbers::pi - abs(angle)) / 2) + 1) / 2;
-  }
-  return output * config_.materialThickness;
-}
-
-float LaserCutRenderer::getMaterialBaseLength(const float angle) const {
+float LaserCutRenderer::f1(const float angle) const {
   assert(abs(angle) < std::numbers::pi);
   if (angle > 0) {
-    return 1 / std::tan((std::numbers::pi - angle) / 2) *
-           config_.materialThickness;
+    return config_.materialThickness / std::tan((std::numbers::pi - angle) / 2);
   } else {
     return 0;
+  }
+}
+
+float LaserCutRenderer::f2(const float angle) const {
+  assert(abs(angle) < std::numbers::pi);
+  if (abs(angle) < std::numbers::pi / 2) {
+    return config_.materialThickness *
+           (std::cos(abs(angle) - std::numbers::pi / 4) / std::sqrt(2) -
+            1 / std::tan((std::numbers::pi - abs(angle)) / 2) / 2);
+  } else {
+    return 0;
+  }
+}
+
+float LaserCutRenderer::f3(const float angle) const {
+  assert(abs(angle) < std::numbers::pi);
+  if (abs(angle) <= std::numbers::pi / 2) {
+    return config_.materialThickness *
+           (std::cos(abs(angle) / 2 - std::numbers::pi / 4) + 0.5);
+  } else {
+    return f1(abs(angle)) / 2 + config_.materialThickness / 2;
   }
 }

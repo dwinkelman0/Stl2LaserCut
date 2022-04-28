@@ -208,9 +208,7 @@ std::optional<Vec2> Line::getIntersection(const Line &other) const {
 }
 
 Line Line::getOffsetLine(const float offset) const {
-  return Line(a_, b_,
-              c_ + offset * sqrt(a_ * a_ + b_ * b_) *
-                       ((b_ > 0 ^ a_ == 0) || b_ == 0 && a_ > 0 ? 1 : -1));
+  return Line(a_, b_, c_ + offset * sqrt(a_ * a_ + b_ * b_));
 }
 
 bool Line::getPossibleEquality(const Line &other) const {
