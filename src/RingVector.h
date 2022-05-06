@@ -3,6 +3,7 @@
 #pragma once
 
 #include <iostream>
+#include <optional>
 #include <vector>
 
 template <typename T>
@@ -47,6 +48,31 @@ class RingVector {
       output.push_back(callback(this->operator[](i), this->operator[](i + 1)));
     }
     return RingVector<T2>(output);
+  }
+
+  template <typename T2>
+  RingVector<T2> foreachPair(
+      const std::function<std::optional<T2>(const T &, const T &)> &callback)
+      const {
+    std::vector<T2> output;
+    for (uint32_t i = 0; i < getSize(); ++i) {
+      std::optional<T2> result =
+          callback(this->operator[](i), this->operator[](i + 1));
+      if (result) {
+        output.push_back(*result);
+      }
+    }
+    return RingVector<T2>(output);
+  }
+
+  template <typename T2>
+  void zip(const RingVector<T2> &other,
+           const std::function<void(const T &, const T2 &)> &callback,
+           const uint32_t offset) const {
+    assert(getSize() == other.getSize());
+    for (uint32_t i = 0; i < getSize(); ++i) {
+      callback(this->operator[](i), other[i + offset]);
+    }
   }
 
   template <typename T2, typename T3>

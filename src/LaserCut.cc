@@ -2,69 +2,167 @@
 
 #include "LaserCut.h"
 
+#include <DirectedGraph.h>
+#include <Lookup.h>
+
 #include <iostream>
 #include <numbers>
 #include <set>
 
 LaserCutRenderer::LaserCutRenderer(const Config &config) : config_(config) {}
 
-static std::vector<RingVector<std::pair<BoundedLine, EdgePtr>>>
+template <typename T>
+class IntersectionComparator {
+ public:
+  IntersectionComparator(const Line &line)
+      : comparator_(line.getPointComparator()) {}
+
+  bool operator()(const std::pair<Vec2, T> &a,
+                  const std::pair<Vec2, T> &b) const {
+    return comparator_(a.first, b.first);
+  }
+
+ private:
+  Line::LinePointComparator comparator_;
+};
+
+template <typename T>
+static std::vector<RingVector<std::pair<BoundedLine, T>>>
 getNonIntersectingPolygons(
-    const RingVector<std::pair<Vec2, std::vector<EdgePtr>>> &points) {
-  // Generate edges
-  std::vector<std::pair<Vec2, EdgePtr>> intersections;
-  points.foreachPair([&points, &intersections](
-                         const std::pair<Vec2, std::vector<EdgePtr>> &aMain,
-                         const std::pair<Vec2, std::vector<EdgePtr>> &bMain) {
-    const auto &[aPoint, aEdges] = aMain;
-    const auto &[bPoint, bEdges] = bMain;
-    BoundedLine mainLine(aPoint, bPoint);
-    std::set<Vec2, Line::LinePointComparator> sortedIntersections(
-        BoundedLine(aPoint, bPoint).getPointComparator());
-    sortedIntersections.insert(aPoint);
-    sortedIntersections.insert(bPoint);
-    points.foreachPair([&mainLine, &sortedIntersections, &aMain, &bMain](
-                           const std::pair<Vec2, std::vector<EdgePtr>> &a,
-                           const std::pair<Vec2, std::vector<EdgePtr>> &b) {
-      if (b.first != aMain.first && a.first != bMain.first) {
-        std::optional<Vec2> intersection =
-            mainLine.getBoundedIntersection(BoundedLine(a.first, b.first));
-        if (intersection) {
-          sortedIntersections.insert(*intersection);
-        }
-      }
-    });
-    EdgePtr edge = aEdges.back() == bEdges.front() ? aEdges.back() : nullptr;
-    if (sortedIntersections.key_comp()(aPoint, bPoint)) {
-      auto begin = sortedIntersections.find(aPoint);
-      auto end = sortedIntersections.find(bPoint);
-      for (auto it = begin; it != end; ++it) {
-        intersections.emplace_back(*it, edge);
-      }
-    }
+    const RingVector<std::pair<BoundedLine, T>> &originalLines) {
+  using IntersectionSet =
+      std::set<std::pair<Vec2, uint32_t>, IntersectionComparator<uint32_t>>;
+  RingVector<IntersectionSet> intersections =
+      originalLines.template foreach<IntersectionSet>(
+          [&intersections](const std::pair<BoundedLine, T> &item) {
+            return IntersectionSet(item.first);
+          });
+
+  // Calculate and sort all intersections
+  uint32_t outerCounter = 0;
+  originalLines.foreach ([&outerCounter, &intersections,
+                          &originalLines](const std::pair<BoundedLine, T> &a) {
+    BoundedLine aLine = a.first;
+    intersections[outerCounter].emplace(
+        aLine.getUpperBound(), (outerCounter + 1) % intersections.getSize());
+    intersections[outerCounter + 1].emplace(aLine.getUpperBound(),
+                                            outerCounter);
+    uint32_t innerCounter = 0;
+    originalLines.foreach (
+        [outerCounter, &innerCounter, &aLine,
+         &intersections](const std::pair<BoundedLine, T> &b) {
+          BoundedLine bLine = b.first;
+          if (innerCounter < outerCounter &&
+              aLine.getUpperBound() != bLine.getLowerBound() &&
+              aLine.getLowerBound() != bLine.getUpperBound()) {
+            std::optional<Vec2> intersection = aLine.getIntersection(bLine);
+            if (intersection) {
+              intersections[innerCounter].emplace(*intersection, outerCounter);
+              intersections[outerCounter].emplace(*intersection, innerCounter);
+            }
+          }
+          ++innerCounter;
+        });
+    ++outerCounter;
   });
 
-  // Isolate non-intersecting polygons
-  RingVector<std::pair<Vec2, EdgePtr>> mainPolygon(intersections);
-  std::vector<RingVector<std::pair<Vec2, EdgePtr>>> subPolygons =
-      mainPolygon.splitCycles([](const std::pair<Vec2, EdgePtr> &a,
-                                 const std::pair<Vec2, EdgePtr> &b) {
-        return abs(a.first - b.first) < 1e-6;
+  intersections.foreach ([](const IntersectionSet &s) {
+    for (const auto &[point, index] : s) {
+      std::cout << point << ", " << index << "; ";
+    }
+    std::cout << std::endl;
+  });
+
+  // Create a graph and filter out nodes not included in any cycles
+  algo::DirectedGraph graph;
+  algo::Lookup<Vec2> lookup;
+  intersections.foreach ([&graph, &lookup](const IntersectionSet &set) {
+    auto it2 = set.begin();
+    for (auto it1 = it2++; it2 != set.end(); ++it1, ++it2) {
+      graph.connect(lookup(it1->first), lookup(it2->first));
+    }
+  });
+  algo::DirectedGraph prunedGraph = graph.pruneSourcesAndSinks();
+  std::set<uint32_t> validPoints = prunedGraph.getNodes();
+
+  // Create a sequence of vertices
+  std::vector<std::pair<Vec2, uint32_t>> vertices;
+  uint32_t counter = 0;
+  intersections.foreach (
+      [&vertices, &counter, &intersections](const IntersectionSet &set) {
+        uint32_t startIndex =
+            (counter + intersections.getSize() - 1) % intersections.getSize();
+        uint32_t endIndex =
+            (counter + intersections.getSize() + 1) % intersections.getSize();
+        bool validZone = false;
+        for (const auto &[point, index] : set) {
+          if (index == startIndex) {
+            validZone = true;
+          }
+          if (validZone) {
+            if (index == endIndex) {
+              break;
+            }
+            vertices.emplace_back(point, counter);
+          }
+        }
+        ++counter;
       });
-  std::vector<RingVector<std::pair<BoundedLine, EdgePtr>>> output;
-  for (const auto &ring : subPolygons) {
-    Polygon polygon(ring.foreach<Vec2>(
-        [](const std::pair<Vec2, EdgePtr> &a) { return a.first; }));
-    if (polygon.getHandedness() == Polygon::Handedness::RIGHT) {
-      output.push_back(ring.foreachPair<std::pair<BoundedLine, EdgePtr>>(
-          [](const std::pair<Vec2, EdgePtr> &a,
-             const std::pair<Vec2, EdgePtr> &b) {
-            return std::pair<BoundedLine, EdgePtr>(
-                BoundedLine(a.first, b.first), a.second);
-          }));
+
+  std::cout << graph.getNodes().size() << " nodes, " << graph.getEdges().size()
+            << " edges" << std::endl;
+  std::cout << prunedGraph.getNodes().size() << " nodes, "
+            << prunedGraph.getEdges().size() << " edges" << std::endl;
+  std::cout << vertices.size() << " vertices" << std::endl;
+
+  // Get distinct polygons
+  std::vector<RingVector<std::pair<Vec2, uint32_t>>> polygons =
+      RingVector(vertices).splitCycles([](const std::pair<Vec2, uint32_t> &a,
+                                          const std::pair<Vec2, uint32_t> &b) {
+        return a.first == b.first;
+      });
+  std::vector<RingVector<std::pair<BoundedLine, T>>> output;
+  for (const auto &ring : polygons) {
+    if (ring.getSize() >= 3) {
+      Polygon polygon(ring);
+      if (polygon.getHandedness() == Polygon::Handedness::RIGHT) {
+        std::optional<std::pair<Vec2, uint32_t>> lastVertex;
+        output.push_back(ring.foreachPair<std::pair<BoundedLine, T>>(
+            [&lastVertex, &originalLines](const std::pair<Vec2, uint32_t> &a,
+                                          const std::pair<Vec2, uint32_t> &b) {
+              if (a.second == b.second) {
+                if (!lastVertex) {
+                  lastVertex = a;
+                }
+                return std::optional<std::pair<BoundedLine, T>>(std::nullopt);
+              } else {
+                auto output = std::make_optional<std::pair<BoundedLine, T>>(
+                    BoundedLine((lastVertex ? lastVertex->first : a.first),
+                                b.first),
+                    originalLines[lastVertex ? lastVertex->second : a.second]
+                        .second);
+                lastVertex.reset();
+                return output;
+              }
+            }));
+      } else {
+        std::cout << "Left-handed polygon" << std::endl;
+      }
+    } else {
+      std::cout << "Invalid fragment" << std::endl;
     }
   }
+  for (const auto &polygon : output) {
+    std::cout << polygon.getSize() << " polygon" << std::endl;
+  }
+
   return output;
+}
+
+std::vector<RingVector<std::pair<BoundedLine, uint32_t>>>
+getNonIntersectingPolygonsTester(
+    const RingVector<std::pair<BoundedLine, uint32_t>> &originalLines) {
+  return getNonIntersectingPolygons<uint32_t>(originalLines);
 }
 
 std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
@@ -86,6 +184,7 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
           if (aOffset == bOffset) {
             return std::optional<Line>();
           } else {
+            std::cout << "Perpendicular" << std::endl;
             return std::optional<Line>(
                 (aOffset > bOffset ? aLine : bLine)
                     .getPerpendicularLine(aLine.getUpperBound()));
@@ -96,12 +195,12 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
       });
 
   // Create polygon
-  std::vector<std::pair<Vec2, std::vector<EdgePtr>>> baselineEdges;
+  std::vector<std::pair<Vec2, std::pair<EdgePtr, EdgePtr>>> baselineEdgePoints;
   projectedEdges.sandwich<std::optional<Line>>(
       perpendicularLines,
-      [this, &baselineEdges](const std::pair<EdgePtr, BoundedLine> &a,
-                             const std::optional<Line> &perpendicularLine,
-                             const std::pair<EdgePtr, BoundedLine> &b) {
+      [this, &baselineEdgePoints](const std::pair<EdgePtr, BoundedLine> &a,
+                                  const std::optional<Line> &perpendicularLine,
+                                  const std::pair<EdgePtr, BoundedLine> &b) {
         const auto &[aEdge, aLine] = a;
         const auto &[bEdge, bLine] = b;
         Line aOffsetLine = aLine.getOffsetLine(f1(aEdge->getAngle()));
@@ -113,69 +212,34 @@ std::vector<std::vector<RenderedEdge>> LaserCutRenderer::renderFace(
           std::optional<Vec2> bIntersection =
               bOffsetLine.getIntersection(*perpendicularLine);
           assert(bIntersection);
-          baselineEdges.emplace_back(*aIntersection,
-                                     std::vector<EdgePtr>({aEdge}));
-          baselineEdges.emplace_back(*bIntersection,
-                                     std::vector<EdgePtr>({bEdge}));
+          baselineEdgePoints.emplace_back(
+              *aIntersection, std::pair<EdgePtr, EdgePtr>(aEdge, nullptr));
+          baselineEdgePoints.emplace_back(
+              *bIntersection, std::pair<EdgePtr, EdgePtr>(nullptr, bEdge));
         } else {
           std::optional<Vec2> intersection =
               aOffsetLine.getIntersection(bOffsetLine);
           assert(intersection);
-          baselineEdges.emplace_back(*intersection,
-                                     std::vector<EdgePtr>({aEdge, bEdge}));
+          baselineEdgePoints.emplace_back(
+              *intersection, std::pair<EdgePtr, EdgePtr>(aEdge, bEdge));
         }
       });
-  projectedEdges.foreach ([](const std::pair<EdgePtr, BoundedLine> &a) {
-    std::cout << a.first << ": " << a.second << std::endl;
-  });
 
-  // Get non-intersecting polygons
-  auto baselinePolygons = getNonIntersectingPolygons(baselineEdges);
-  if (baselinePolygons.size() == 0) {
-    std::cout << "No baseline polygons" << std::endl;
-  }
-  for (const auto &polygon : baselinePolygons) {
-    std::cout << "Polygon (" << polygon.getSize() << ", "
-              << projectedEdges.getSize() << " edges):" << std::endl;
-    polygon.foreach ([](const std::pair<BoundedLine, EdgePtr> &a) {
-      std::cout << " - " << a.second << ": " << a.first << std::endl;
-    });
-  }
-
-  // Compute tooth depth offsets
-  std::vector<std::vector<RingVector<std::pair<BoundedLine, EdgePtr>>>>
-      toothDepthPolygons;
-  for (const auto &baselinePolygon : baselinePolygons) {
-    auto toothDepthPolygon =
-        baselinePolygon.foreachPair<std::pair<Vec2, std::vector<EdgePtr>>>(
-            [this](const std::pair<BoundedLine, EdgePtr> &a,
-                   const std::pair<BoundedLine, EdgePtr> &b) {
-              const auto &[aLine, aEdge] = a;
-              const auto &[bLine, bEdge] = b;
-              Line aOffsetLine =
-                  aLine.getOffsetLine(aEdge ? f2(aEdge->getAngle()) : 0);
-              Line bOffsetLine =
-                  bLine.getOffsetLine(bEdge ? f2(bEdge->getAngle()) : 0);
-              std::cout << (aEdge ? f2(aEdge->getAngle()) : 0) << ", "
-                        << (bEdge ? f2(bEdge->getAngle()) : 0) << std::endl;
-              std::optional<Vec2> intersection =
-                  aOffsetLine.getIntersection(bOffsetLine);
-              assert(intersection);
-              return std::pair<Vec2, std::vector<EdgePtr>>(*intersection,
-                                                           {aEdge, bEdge});
-            });
-    toothDepthPolygons.push_back(getNonIntersectingPolygons(toothDepthPolygon));
-  }
-  uint32_t i = 0;
-  for (const auto &polygons : toothDepthPolygons) {
-    for (const auto &polygon : polygons) {
-      polygon.foreach ([i](const std::pair<BoundedLine, EdgePtr> &a) {
-        std::cout << " - " << i << ": " << a.second << ": " << a.first
-                  << std::endl;
-      });
-    }
-    ++i;
-  }
+  RingVector<std::pair<BoundedLine, EdgePtr>> baselineEdges =
+      RingVector<std::pair<Vec2, std::pair<EdgePtr, EdgePtr>>>(
+          baselineEdgePoints)
+          .foreachPair<std::pair<BoundedLine, EdgePtr>>(
+              [](const std::pair<Vec2, std::pair<EdgePtr, EdgePtr>> &a,
+                 const std::pair<Vec2, std::pair<EdgePtr, EdgePtr>> &b) {
+                assert(a.second.second == b.second.first);
+                return a.first != b.first
+                           ? std::make_optional<
+                                 std::pair<BoundedLine, EdgePtr>>(
+                                 BoundedLine(a.first, b.first), a.second.second)
+                           : std::optional<std::pair<BoundedLine, EdgePtr>>(
+                                 std::nullopt);
+              });
+  getNonIntersectingPolygons(baselineEdges);
 
   return {};
 }

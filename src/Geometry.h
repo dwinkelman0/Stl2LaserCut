@@ -143,7 +143,6 @@ class Line {
   Line getPerpendicularLine(const Vec2 &point) const;
   bool comparePoints(const Vec2 &a, const Vec2 &b) const;
   Line normalize() const;
-  Line getMidline(const Line &other, const Vec2 &point) const;
   float getAngle(const Line &other) const;
 
   friend std::ostream &operator<<(std::ostream &os, const Line &line);
@@ -170,9 +169,8 @@ class Line {
 class BoundedLine : public Line {
  public:
   BoundedLine(const Vec2 b1, const Vec2 b2);
+  BoundedLine(const Line &line, const Vec2 &b1, const Vec2 &b2);
 
-  std::optional<Vec2> getBoundedIntersection(const BoundedLine &other) const;
-  Vec2 getMidpoint() const;
   inline Vec2 getLowerBound() const { return lowerBound_; }
   inline Vec2 getUpperBound() const { return upperBound_; }
 
@@ -185,12 +183,15 @@ class BoundedLine : public Line {
 class Polygon {
  public:
   Polygon(const RingVector<Vec2> &points) : points_(points) {}
+  template <typename T>
+  Polygon(const RingVector<std::pair<Vec2, T>> &points)
+      : points_(points.template foreach<Vec2>(
+            [](const std::pair<Vec2, T> &a) { return a.first; })) {}
   Polygon(const FacePtr &face);
 
   enum class Handedness { RIGHT, LEFT, NEITHER };
 
   inline RingVector<Vec2> getPoints() const { return points_; }
-  bool isSelfIntersecting() const;
   float getArea() const;
   Handedness getHandedness() const;
   RingVector<BoundedLine> getLines() const;

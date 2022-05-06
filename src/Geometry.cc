@@ -235,15 +235,6 @@ Line Line::normalize() const {
   return Line(a_ / magnitude, b_ / magnitude, c_ / magnitude);
 }
 
-Line Line::getMidline(const Line &other, const Vec2 &point) const {
-  Line thisNorm = normalize();
-  Line otherNorm = other.normalize();
-  float newA = thisNorm.a_ + otherNorm.a_;
-  float newB = thisNorm.b_ + otherNorm.b_;
-  return Line(newA, newB,
-              newA * std::get<0>(point) + newB * std::get<1>(point));
-}
-
 float Line::getAngle(const Line &other) const {
   float output = angle({a_, b_}, {other.a_, other.b_});
   return cross({a_, b_}, {other.a_, other.b_}) > 0 ? output : -output;
@@ -274,23 +265,8 @@ BoundedLine::BoundedLine(const Vec2 b1, const Vec2 b2) : Line(0, 0, 0) {
   c_ = a_ * std::get<0>(b1) + b_ * std::get<1>(b1);
 }
 
-std::optional<Vec2> BoundedLine::getBoundedIntersection(
-    const BoundedLine &other) const {
-  auto result = getIntersection(other);
-  if (result && !comparePoints(*result, lowerBound_) &&
-      !comparePoints(upperBound_, *result) &&
-      !other.comparePoints(*result, other.lowerBound_) &&
-      !other.comparePoints(other.upperBound_, *result)) {
-    return result;
-  } else {
-    return std::nullopt;
-  }
-}
-
-Vec2 BoundedLine::getMidpoint() const {
-  return {(std::get<0>(upperBound_) + std::get<0>(lowerBound_)) / 2,
-          (std::get<1>(upperBound_) + std::get<1>(lowerBound_)) / 2};
-}
+BoundedLine::BoundedLine(const Line &line, const Vec2 &b1, const Vec2 &b2)
+    : Line(line), lowerBound_(b1), upperBound_(b2) {}
 
 std::ostream &operator<<(std::ostream &os, const Line &line) {
   os << line.a_ << "x + " << line.b_ << "y = " << line.c_;
@@ -318,19 +294,6 @@ Polygon::Polygon(const FacePtr &face) : points_({}) {
         return Vec2(std::get<0>(transformed), std::get<1>(transformed));
       });
   points_.foreachPair([](const Vec2 &a, const Vec2 &b) { assert(a != b); });
-}
-
-bool Polygon::isSelfIntersecting() const {
-  RingVector<BoundedLine> lines = getLines();
-  for (uint32_t i = 0; i < lines.getSize(); ++i) {
-    for (uint32_t j = i + 2;
-         j < std::min(lines.getSize(), lines.getSize() - 1 + i); ++j) {
-      if (lines[i].getBoundedIntersection(lines[j])) {
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 float Polygon::getArea() const {
